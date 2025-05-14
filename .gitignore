@@ -46,3 +46,6 @@ Thumbs.db
 
 # Node modules (for UI)
 node_modules/
+
+# Additional
+db_setup_summary.json
