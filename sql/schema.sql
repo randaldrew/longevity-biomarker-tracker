@@ -65,7 +65,7 @@ CREATE TABLE Anthropometry (
     ExamDate     DATE NOT NULL,
     HeightCM     DECIMAL(5,2),
     WeightKG     DECIMAL(5,2),
-    BMI          DECIMAL(5,2),
+    BMI          DECIMAL(4,2),
     CreatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY (UserID, ExamDate),
     CONSTRAINT fk_anthro_user FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE
@@ -121,8 +121,8 @@ CREATE TABLE BiologicalAgeResult (
 );
 
 /* --------- Analytics Indexes --------- */
--- Covering index for trend queries
-CREATE INDEX idx_measurement_trend ON Measurement(UserID, BiomarkerID, TakenAt, Value);
+-- Covering index for trend queries (fixed to use SessionID)
+CREATE INDEX idx_measurement_trend ON Measurement(SessionID, BiomarkerID, TakenAt, Value);
 
 -- Index for biomarker value analysis
 CREATE INDEX idx_measurement_bio_value ON Measurement(BiomarkerID, Value);
@@ -132,19 +132,34 @@ CREATE INDEX idx_bio_age_user_model ON BiologicalAgeResult(UserID, ModelID, Comp
 
 -- Index for anthropometry BMI lookups (covered by UNIQUE key, no additional index needed)
 
+-- Index for anthropometry BMI lookups (covered by UNIQUE key, no additional index needed)
+
 /* --------- Optimized Views for API/Analytics --------- */
--- View for latest measurement per biomarker per user
+
+/* View: latest measurement per biomarker per user (FIXED) */
 CREATE VIEW v_user_latest_measurements AS
-SELECT m.UserID, m.BiomarkerID, m.Value, m.TakenAt, b.Name as BiomarkerName, b.Units
-FROM Measurement m
-JOIN Biomarker b ON m.BiomarkerID = b.BiomarkerID
+SELECT
+    s.UserID,
+    m.BiomarkerID,
+    m.Value,
+    m.TakenAt,
+    b.Name  AS BiomarkerName,
+    b.Units
+FROM Measurement AS m
+JOIN MeasurementSession AS s        ON m.SessionID     = s.SessionID
+JOIN Biomarker          AS b        ON m.BiomarkerID   = b.BiomarkerID
 JOIN (
-    SELECT UserID, BiomarkerID, MAX(TakenAt) as LatestAt
-    FROM Measurement
-    GROUP BY UserID, BiomarkerID
-) latest ON m.UserID = latest.UserID
-    AND m.BiomarkerID = latest.BiomarkerID
-    AND m.TakenAt = latest.LatestAt;
+        SELECT
+            s2.UserID,
+            m2.BiomarkerID,
+            MAX(m2.TakenAt) AS LatestAt
+        FROM Measurement AS m2
+        JOIN MeasurementSession AS s2 ON m2.SessionID = s2.SessionID
+        GROUP BY s2.UserID, m2.BiomarkerID
+     ) latest
+     ON  s.UserID        = latest.UserID
+     AND m.BiomarkerID   = latest.BiomarkerID
+     AND m.TakenAt       = latest.LatestAt;
 
 -- View for biomarkers with reference ranges
 CREATE VIEW v_biomarker_ranges AS

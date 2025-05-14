@@ -146,7 +146,7 @@ def verify_schema():
             # Check views exist (UPDATED with new anthro view)
             cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
             views = cursor.fetchall()
-            view_names = [view["TABLE_NAME"] for view in views]
+            view_names = [view[f'Tables_in_{DB_CONFIG["database"]}'] for view in views]
 
             expected_views = [
                 "v_user_latest_measurements",

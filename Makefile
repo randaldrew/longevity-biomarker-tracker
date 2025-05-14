@@ -1,4 +1,16 @@
-.PHONY: db etl test run ui clean help
+.PHONY: db etl test run ui clean help db-reset
+
+# Use one shell for multi-line recipes
+.ONESHELL:
+
+# Load environment variables from .env file (robust approach)
+ifneq ("$(wildcard .env)","")
+include .env
+export $(shell grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env | cut -d= -f1)
+endif
+
+# Allow database name override (useful for tests)
+DB ?= $(MYSQL_DATABASE)
 
 help:
 	@echo "Longevity Biomarker Tracker"
@@ -47,7 +59,5 @@ clean:
 	rm -rf data/raw/* data/clean/*
 
 db-reset:
-	docker compose exec db mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) \
-      $(MYSQL_DATABASE) < sql/schema.sql && \
-	docker compose exec db mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) \
-      $(MYSQL_DATABASE) < sql/01_seed.sql
+	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(DB) < sql/schema.sql
+	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(DB) < sql/01_seed.sql
