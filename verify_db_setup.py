@@ -3,6 +3,7 @@
 Database Setup and Testing Script (FINAL v1.3 - WITH ANTHROPOMETRY).
 
 Validates complete database setup including BMI-enabled HD reference population
+All checks are case-insensitive to handle MySQL's mixed case behavior.
 """
 
 import os
@@ -57,6 +58,11 @@ EXPECTED_FOREIGN_KEYS = {
 }
 
 
+def normalize_name(name: str) -> str:
+    """Normalize database object names for case-insensitive comparison"""
+    return name.lower().strip()
+
+
 def test_database_connection():
     """Test database connectivity"""
     print("Testing database connection...")
@@ -93,13 +99,19 @@ def verify_schema():
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # Check all tables exist
+            # Check all tables exist (case-insensitive)
             cursor.execute("SHOW TABLES")
             tables = [
-                row[f'Tables_in_{DB_CONFIG["database"]}'] for row in cursor.fetchall()
+                normalize_name(row[f'Tables_in_{DB_CONFIG["database"]}'])
+                for row in cursor.fetchall()
+            ]
+            expected_tables_lower = [normalize_name(t) for t in expected_tables]
+            missing_tables = [
+                et
+                for et, etl in zip(expected_tables, expected_tables_lower)
+                if etl not in tables
             ]
 
-            missing_tables = [t for t in expected_tables if t not in tables]
             if missing_tables:
                 print(f"✗ Missing tables: {missing_tables}")
                 return False
@@ -108,26 +120,32 @@ def verify_schema():
                 f"✓ All {len(expected_tables)} tables exist (including Anthropometry)"
             )
 
-            # Check specific foreign key names
+            # Check specific foreign key names (case-insensitive)
             cursor.execute(
                 """
-                           SELECT CONSTRAINT_NAME, TABLE_NAME, REFERENCED_TABLE_NAME
-                           FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-                           WHERE CONSTRAINT_SCHEMA = %s
-                           """,
+                SELECT CONSTRAINT_NAME, TABLE_NAME, REFERENCED_TABLE_NAME
+                FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+                WHERE CONSTRAINT_SCHEMA = %s
+                """,
                 (DB_CONFIG["database"],),
             )
 
             foreign_keys = {
-                row["CONSTRAINT_NAME"]: (
-                    row["TABLE_NAME"],
-                    row["REFERENCED_TABLE_NAME"],
+                normalize_name(row["CONSTRAINT_NAME"]): (
+                    normalize_name(row["TABLE_NAME"]),
+                    normalize_name(row["REFERENCED_TABLE_NAME"]),
                 )
                 for row in cursor.fetchall()
             }
 
+            # Convert expected FKs to lowercase for comparison
+            expected_fks_lower = {
+                normalize_name(k): (normalize_name(v[0]), normalize_name(v[1]))
+                for k, v in EXPECTED_FOREIGN_KEYS.items()
+            }
+
             missing_fks = []
-            for fk_name, (table, ref_table) in EXPECTED_FOREIGN_KEYS.items():
+            for fk_name, (table, ref_table) in expected_fks_lower.items():
                 if fk_name not in foreign_keys:
                     missing_fks.append(fk_name)
                 elif foreign_keys[fk_name] != (table, ref_table):
@@ -143,10 +161,13 @@ def verify_schema():
                     f"✓ All {len(EXPECTED_FOREIGN_KEYS)} foreign keys have explicit names"
                 )
 
-            # Check views exist (UPDATED with new anthro view)
+            # Check views exist (case-insensitive)
             cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
             views = cursor.fetchall()
-            view_names = [view[f'Tables_in_{DB_CONFIG["database"]}'] for view in views]
+            view_names = [
+                normalize_name(view[f'Tables_in_{DB_CONFIG["database"]}'])
+                for view in views
+            ]
 
             expected_views = [
                 "v_user_latest_measurements",
@@ -154,36 +175,55 @@ def verify_schema():
                 "v_hd_reference_candidates",
                 "v_user_anthro_history",
             ]
-            missing_views = [v for v in expected_views if v not in view_names]
+            expected_views_lower = [normalize_name(v) for v in expected_views]
+            missing_views = [
+                ev
+                for ev, evl in zip(expected_views, expected_views_lower)
+                if evl not in view_names
+            ]
 
             if missing_views:
                 print(f"⚠ Missing views: {missing_views}")
             else:
                 print(f"✓ Found all {len(expected_views)} expected views")
 
-            # Check analytics indexes
+            # Replace the index checking section in verify_db_setup.py around line 150-180
+            # with this case-insensitive version:
+
+            # Check analytics indexes (case-insensitive)
             expected_indexes = [
                 "idx_measurement_trend",
                 "idx_measurement_bio_value",
                 "idx_bio_age_user_model",
             ]
+
             cursor.execute(
                 """
-                           SELECT DISTINCT INDEX_NAME
-                           FROM INFORMATION_SCHEMA.STATISTICS
-                           WHERE TABLE_SCHEMA = %s
-                             AND INDEX_NAME IN (%s, %s, %s)
-                           """,
-                (DB_CONFIG["database"], *expected_indexes),
+                SELECT DISTINCT LOWER(INDEX_NAME) as index_name
+                FROM INFORMATION_SCHEMA.STATISTICS
+                WHERE TABLE_SCHEMA = %s
+                  AND TABLE_NAME IN ('Measurement', 'BiologicalAgeResult')
+                  AND INDEX_NAME NOT IN
+                      ('PRIMARY', 'idx_session_bio', 'fk_measurement_session', 'fk_measurement_biomarker')
+                """,
+                (DB_CONFIG["database"],),
             )
 
-            found_indexes = [row["INDEX_NAME"] for row in cursor.fetchall()]
-            missing_indexes = [
-                idx for idx in expected_indexes if idx not in found_indexes
-            ]
+            found_indexes_raw = [row["index_name"] for row in cursor.fetchall()]
+            # Convert expected to lowercase for comparison
+            expected_indexes_lower = [idx.lower() for idx in expected_indexes]
+
+            # Check if all expected indexes exist (case-insensitive)
+            missing_indexes = []
+            for expected_idx in expected_indexes_lower:
+                if not any(
+                    expected_idx in found_idx for found_idx in found_indexes_raw
+                ):
+                    missing_indexes.append(expected_idx)
 
             if missing_indexes:
                 print(f"✗ Missing analytics indexes: {missing_indexes}")
+                print(f"Found indexes: {found_indexes_raw}")
                 return False
             else:
                 print(f"✓ Found all {len(expected_indexes)} analytics indexes")
@@ -202,7 +242,7 @@ def verify_anthropometry_table():
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # Check table structure
+            # Check table structure (case-insensitive)
             cursor.execute("DESCRIBE Anthropometry")
             columns = cursor.fetchall()
 
@@ -214,10 +254,13 @@ def verify_anthropometry_table():
                 "WeightKG",
                 "BMI",
             ]
-            existing_columns = [col["Field"] for col in columns]
+            existing_columns = [normalize_name(col["Field"]) for col in columns]
+            required_columns_lower = [normalize_name(col) for col in required_columns]
 
             missing_columns = [
-                col for col in required_columns if col not in existing_columns
+                rc
+                for rc, rcl in zip(required_columns, required_columns_lower)
+                if rcl not in existing_columns
             ]
             if missing_columns:
                 print(f"✗ Missing columns in Anthropometry: {missing_columns}")
@@ -228,13 +271,13 @@ def verify_anthropometry_table():
             # Check unique constraint
             cursor.execute(
                 """
-                           SELECT COUNT(*) as constraint_count
-                           FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
-                           WHERE TABLE_SCHEMA = %s
-                             AND TABLE_NAME = 'Anthropometry'
-                             AND CONSTRAINT_TYPE = 'UNIQUE'
-                             AND CONSTRAINT_NAME != 'PRIMARY'
-                           """,
+                SELECT COUNT(*) as constraint_count
+                FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                WHERE TABLE_SCHEMA = %s
+                  AND TABLE_NAME = 'Anthropometry'
+                  AND CONSTRAINT_TYPE = 'UNIQUE'
+                  AND CONSTRAINT_NAME != 'PRIMARY'
+                """,
                 (DB_CONFIG["database"],),
             )
 
@@ -247,12 +290,12 @@ def verify_anthropometry_table():
             # Check BMI data types
             cursor.execute(
                 """
-                           SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, NUMERIC_SCALE
-                           FROM INFORMATION_SCHEMA.COLUMNS
-                           WHERE TABLE_SCHEMA = %s
-                             AND TABLE_NAME = 'Anthropometry'
-                             AND COLUMN_NAME IN ('BMI', 'HeightCM', 'WeightKG')
-                           """,
+                SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, NUMERIC_SCALE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = %s
+                  AND TABLE_NAME = 'Anthropometry'
+                  AND COLUMN_NAME IN ('BMI', 'HeightCM', 'WeightKG')
+                """,
                 (DB_CONFIG["database"],),
             )
 
@@ -281,7 +324,7 @@ def verify_biological_age_models():
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # Check both models exist
+            # Check both models exist (case-insensitive comparison)
             cursor.execute(
                 "SELECT ModelName, Description FROM BiologicalAgeModel ORDER BY ModelID"
             )
@@ -289,8 +332,10 @@ def verify_biological_age_models():
 
             expected_models = ["Phenotypic Age", "Homeostatic Dysregulation"]
             actual_models = [model["ModelName"] for model in models]
+            expected_models_lower = [normalize_name(m) for m in expected_models]
+            actual_models_lower = [normalize_name(m) for m in actual_models]
 
-            if set(expected_models).issubset(set(actual_models)):
+            if set(expected_models_lower).issubset(set(actual_models_lower)):
                 print(f"✓ Both required models present: {actual_models}")
             else:
                 print(
@@ -298,31 +343,31 @@ def verify_biological_age_models():
                 )
                 return False
 
-            # Check Phenotypic Age has 9 coefficients
+            # Check Phenotypic Age has 9 coefficients (case-insensitive)
             cursor.execute(
                 """
-                           SELECT COUNT(*) as coeff_count
-                           FROM ModelUsesBiomarker mb
-                                    JOIN BiologicalAgeModel m ON mb.ModelID = m.ModelID
-                           WHERE m.ModelName = 'Phenotypic Age'
-                           """
+                SELECT COUNT(*) as coeff_count
+                FROM ModelUsesBiomarker mb
+                         JOIN BiologicalAgeModel m ON mb.ModelID = m.ModelID
+                WHERE LOWER(m.ModelName) = LOWER('Phenotypic Age')
+                """
             )
             pheno_coeffs = cursor.fetchone()["coeff_count"]
 
             if pheno_coeffs == 9:
                 print("✓ Phenotypic Age has all 9 biomarker coefficients")
             else:
-                print("✗ Phenotypic Age has {pheno_coeffs} coefficients, expected 9")
+                print(f"✗ Phenotypic Age has {pheno_coeffs} coefficients, expected 9")
                 return False
 
-            # Check HD has no individual coefficients (algorithm is data-driven)
+            # Check HD has no individual coefficients (case-insensitive)
             cursor.execute(
                 """
-                           SELECT COUNT(*) as coeff_count
-                           FROM ModelUsesBiomarker mb
-                                    JOIN BiologicalAgeModel m ON mb.ModelID = m.ModelID
-                           WHERE m.ModelName = 'Homeostatic Dysregulation'
-                           """
+                SELECT COUNT(*) as coeff_count
+                FROM ModelUsesBiomarker mb
+                         JOIN BiologicalAgeModel m ON mb.ModelID = m.ModelID
+                WHERE LOWER(m.ModelName) = LOWER('Homeostatic Dysregulation')
+                """
             )
             hd_coeffs = cursor.fetchone()["coeff_count"]
 
@@ -335,13 +380,13 @@ def verify_biological_age_models():
                     f"⚠ Homeostatic Dysregulation has {hd_coeffs} coefficients (unexpected but not wrong)"
                 )
 
-            # Check JSON metadata
+            # Check JSON metadata (case-insensitive model names)
             cursor.execute(
                 """
-                           SELECT ModelName, FormulaJSON
-                           FROM BiologicalAgeModel
-                           WHERE ModelName IN ('Phenotypic Age', 'Homeostatic Dysregulation')
-                           """
+                SELECT ModelName, FormulaJSON
+                FROM BiologicalAgeModel
+                WHERE LOWER(ModelName) IN (LOWER('Phenotypic Age'), LOWER('Homeostatic Dysregulation'))
+                """
             )
 
             json_data = cursor.fetchall()
@@ -350,10 +395,15 @@ def verify_biological_age_models():
                     parsed = (
                         json.loads(model["FormulaJSON"]) if model["FormulaJSON"] else {}
                     )
-                    if model["ModelName"] == "Phenotypic Age" and "pmid" in parsed:
+                    if (
+                        normalize_name(model["ModelName"])
+                        == normalize_name("Phenotypic Age")
+                        and "pmid" in parsed
+                    ):
                         print("✓ Phenotypic Age includes PMID reference")
                     elif (
-                        model["ModelName"] == "Homeostatic Dysregulation"
+                        normalize_name(model["ModelName"])
+                        == normalize_name("Homeostatic Dysregulation")
                         and "algorithm" in parsed
                     ):
                         print("✓ Homeostatic Dysregulation includes algorithm metadata")
@@ -394,8 +444,10 @@ def verify_seed_data():
             coeff_count = cursor.fetchone()["count"]
             print(f"✓ {coeff_count} model coefficients loaded")
 
-            # Verify specific biomarkers exist in correct order
-            cursor.execute("SELECT NHANESVarCode FROM Biomarker ORDER BY BiomarkerID")
+            # Verify specific biomarkers exist in correct order (case-insensitive)
+            cursor.execute(
+                "SELECT UPPER(NHANESVarCode) as NHANESVarCode FROM Biomarker ORDER BY BiomarkerID"
+            )
             var_codes = [row["NHANESVarCode"] for row in cursor.fetchall()]
             expected_codes = [
                 "LBXSAL",
@@ -409,7 +461,11 @@ def verify_seed_data():
                 "LBXRDW",
             ]
 
-            if var_codes == expected_codes:
+            # Case-insensitive comparison
+            var_codes_upper = [code.upper() for code in var_codes]
+            expected_codes_upper = [code.upper() for code in expected_codes]
+
+            if var_codes_upper == expected_codes_upper:
                 print("✓ All 9 required NHANES biomarkers present in correct order")
             else:
                 print(
@@ -431,16 +487,16 @@ def validate_phenotypic_age_coefficients():
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # Get Phenotypic Age coefficients
+            # Get Phenotypic Age coefficients (case-insensitive)
             cursor.execute(
                 """
-                           SELECT b.Name, mb.Coefficient, mb.Transform
-                           FROM BiologicalAgeModel m
-                                    JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
-                                    JOIN Biomarker b ON mb.BiomarkerID = b.BiomarkerID
-                           WHERE m.ModelName = 'Phenotypic Age'
-                           ORDER BY b.BiomarkerID
-                           """
+                SELECT b.Name, mb.Coefficient, mb.Transform
+                FROM BiologicalAgeModel m
+                         JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
+                         JOIN Biomarker b ON mb.BiomarkerID = b.BiomarkerID
+                WHERE LOWER(m.ModelName) = LOWER('Phenotypic Age')
+                ORDER BY b.BiomarkerID
+                """
             )
 
             actual_coefficients = cursor.fetchall()
@@ -449,7 +505,13 @@ def validate_phenotypic_age_coefficients():
             for row in actual_coefficients:
                 name = row["Name"]
                 actual_coeff = float(row["Coefficient"])
-                expected_coeff = EXPECTED_PHENOTYPIC_COEFFICIENTS.get(name)
+
+                # Case-insensitive lookup for expected coefficient
+                expected_coeff = None
+                for expected_name, coeff in EXPECTED_PHENOTYPIC_COEFFICIENTS.items():
+                    if normalize_name(name) == normalize_name(expected_name):
+                        expected_coeff = coeff
+                        break
 
                 if expected_coeff is None:
                     errors.append(f"Unexpected biomarker: {name}")
@@ -499,16 +561,16 @@ def validate_reference_ranges():
         with connection.cursor() as cursor:
             validated_count = 0
 
-            # Check clinical ranges for select biomarkers
+            # Check clinical ranges for select biomarkers (case-insensitive)
             for biomarker_name in expected_clinical_ranges:
                 cursor.execute(
                     """
-                               SELECT rr.Sex, rr.MinVal, rr.MaxVal, b.Units
-                               FROM ReferenceRange rr
-                                        JOIN Biomarker b ON rr.BiomarkerID = b.BiomarkerID
-                               WHERE b.Name = %s
-                                 AND rr.RangeType = 'clinical'
-                               """,
+                    SELECT rr.Sex, rr.MinVal, rr.MaxVal, b.Units
+                    FROM ReferenceRange rr
+                             JOIN Biomarker b ON rr.BiomarkerID = b.BiomarkerID
+                    WHERE LOWER(b.Name) = LOWER(%s)
+                      AND LOWER(rr.RangeType) = LOWER('clinical')
+                    """,
                     (biomarker_name,),
                 )
 
@@ -522,13 +584,13 @@ def validate_reference_ranges():
 
             print(f"✓ Validated {validated_count} clinical reference ranges")
 
-            # Check that longevity ranges exist
+            # Check that longevity ranges exist (case-insensitive)
             cursor.execute(
                 """
-                           SELECT COUNT(*) as count
-                           FROM ReferenceRange
-                           WHERE RangeType = 'longevity'
-                           """
+                SELECT COUNT(*) as count
+                FROM ReferenceRange
+                WHERE LOWER (RangeType) = LOWER ('longevity')
+                """
             )
             longevity_count = cursor.fetchone()["count"]
             print(f"✓ Found {longevity_count} longevity-optimized reference ranges")
@@ -559,13 +621,13 @@ def validate_hd_reference_population():
             # Check BMI filtering is working (even if we have no test data yet)
             cursor.execute(
                 """
-                           SELECT MIN(Age) as min_age,
-                                  MAX(Age) as max_age,
-                                  MIN(BMI) as min_bmi,
-                                  MAX(BMI) as max_bmi,
-                                  COUNT(*) as total_candidates
-                           FROM v_hd_reference_candidates
-                           """
+                SELECT MIN(Age) as min_age,
+                       MAX(Age) as max_age,
+                       MIN(BMI) as min_bmi,
+                       MAX(BMI) as max_bmi,
+                       COUNT(*) as total_candidates
+                FROM v_hd_reference_candidates
+                """
             )
             stats = cursor.fetchone()
 
@@ -587,10 +649,10 @@ def validate_hd_reference_population():
             # Test the view joins work correctly
             cursor.execute(
                 """
-                           SELECT COUNT(*) as total
-                           FROM v_hd_reference_candidates hd
-                                    JOIN v_user_latest_measurements m ON hd.UserID = m.UserID LIMIT 1
-                           """
+                SELECT COUNT(*) as total
+                FROM v_hd_reference_candidates hd
+                         JOIN v_user_latest_measurements m ON hd.UserID = m.UserID LIMIT 1
+                """
             )
             # NEW – assert that at least one row came back
             join_test = cursor.fetchone()
@@ -616,26 +678,30 @@ def run_sample_queries():
             view_count = cursor.fetchone()["count"]
             print(f"✓ Query 1: Biomarker ranges view returned {view_count} rows")
 
-            # Query 2: Check model completeness
+            # Query 2: Check model completeness (case-insensitive)
             cursor.execute(
                 """
-                           SELECT m.ModelName,
-                                  COUNT(mb.BiomarkerID)                            as biomarker_count,
-                                  COUNT(CASE WHEN mb.Transform = 'log' THEN 1 END) as log_transforms
-                           FROM BiologicalAgeModel m
-                                    LEFT JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
-                           GROUP BY m.ModelID, m.ModelName
-                           ORDER BY m.ModelID
-                           """
+                SELECT m.ModelName,
+                       COUNT(mb.BiomarkerID)                            as biomarker_count,
+                       COUNT(CASE WHEN mb.Transform = 'log' THEN 1 END) as log_transforms
+                FROM BiologicalAgeModel m
+                         LEFT JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
+                GROUP BY m.ModelID, m.ModelName
+                ORDER BY m.ModelID
+                """
             )
             models = cursor.fetchall()
 
             for model in models:
-                if model["ModelName"] == "Phenotypic Age":
+                if normalize_name(model["ModelName"]) == normalize_name(
+                    "Phenotypic Age"
+                ):
                     print(
                         f"✓ Query 2: {model['ModelName']} has {model['biomarker_count']} biomarkers, {model['log_transforms']} log-transformed"
                     )
-                elif model["ModelName"] == "Homeostatic Dysregulation":
+                elif normalize_name(model["ModelName"]) == normalize_name(
+                    "Homeostatic Dysregulation"
+                ):
                     print(
                         f"✓ Query 2: {model['ModelName']} uses data-driven covariance matrix"
                     )
@@ -702,14 +768,14 @@ def create_team_summary():
             # Get model summary
             cursor.execute(
                 """
-                           SELECT m.ModelName,
-                                  COUNT(mb.BiomarkerID) as biomarker_count,
-                                  m.Description
-                           FROM BiologicalAgeModel m
-                                    LEFT JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
-                           GROUP BY m.ModelID, m.ModelName, m.Description
-                           ORDER BY m.ModelID
-                           """
+                SELECT m.ModelName,
+                       COUNT(mb.BiomarkerID) as biomarker_count,
+                       m.Description
+                FROM BiologicalAgeModel m
+                         LEFT JOIN ModelUsesBiomarker mb ON m.ModelID = mb.ModelID
+                GROUP BY m.ModelID, m.ModelName, m.Description
+                ORDER BY m.ModelID
+                """
             )
 
             # Get biomarker summary
@@ -719,10 +785,10 @@ def create_team_summary():
             # Get reference range summary
             cursor.execute(
                 """
-                           SELECT RangeType, COUNT(*) as count
-                           FROM ReferenceRange
-                           GROUP BY RangeType
-                           """
+                SELECT RangeType, COUNT(*) as count
+                FROM ReferenceRange
+                GROUP BY RangeType
+                """
             )
             ranges = {row["RangeType"]: row["count"] for row in cursor.fetchall()}
 

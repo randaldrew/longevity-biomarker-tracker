@@ -32,7 +32,6 @@ EXCLUDE_PATTERNS=(
   "data/clean/*"
 
   # Database dumps
-  "*.sql"
   "*.dump"
 
   # Virtual environment
@@ -86,7 +85,7 @@ write_file "./sql/schema.sql"
 # as that can be problematic with shell expansion
 echo "Finding and processing files..."
 find . -type f \( -name "*.py" -o -name "*.ipynb" -o -name "*.md" -o -name "*.sh" -o -name "*.yml" -o -name "*.yaml" -o -name "Makefile" -o -name "Dockerfile" -o -name "docker-compose.yml" -o -name ".env.example" -o -name "*.js" -o -name "*.html" -o -name "*.css" \) \
-  -not -path "*/venv/*" \
+  -not -path "*/.venv/*" \
   -not -path "*/.git/*" \
   -not -path "*/node_modules/*" \
   -not -path "*/__pycache__/*" \

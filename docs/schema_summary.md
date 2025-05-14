@@ -103,8 +103,8 @@
 | CreatedAt | TIMESTAMP | AUTO_INCREMENT |
 
 **Foreign Keys:**
-- BiomarkerID → Biomarker.BiomarkerID
 - ModelID → BiologicalAgeModel.ModelID
+- BiomarkerID → Biomarker.BiomarkerID
 
 ### ReferenceRange
 

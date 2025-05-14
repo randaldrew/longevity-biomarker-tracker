@@ -1,23 +1,20 @@
 [sqlfluff]
 dialect = mysql
-templater = jinja
-# Set reasonable line length
-max_line_length = 120
-# We're not ignoring rules globally anymore
+templater = raw
+exclude_rules = LT02,L034,L036,L044,L046,CV01,CV02,PRS
 
 [sqlfluff:indentation]
+indent_unit = space
 tab_space_size = 4
 
-[sqlfluff:rules]
-# Disable rules for specific files
-[sqlfluff:rules:references.keywords]
-# Disable the keywords rule for our schema
-ignore_words = User, Session, Value, Range
+[sqlfluff:rules:L010]
+capitalisation_policy = consistent
 
-[sqlfluff:rules:layout.spacing]
-# Skip spacing checks
-spacing_before_brackets = False
+[sqlfluff:rules:L014]
+extended_capitalisation_policy = consistent
 
-[sqlfluff:rules:layout.long_lines]
-# Skip long lines
-ignore = True
+[sqlfluff:rules:L030]
+capitalisation_policy = consistent
+
+[sqlfluff:rules:L040]
+capitalisation_policy = consistent

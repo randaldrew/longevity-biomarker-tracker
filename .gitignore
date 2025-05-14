@@ -32,7 +32,6 @@ data/clean/*
 !data/raw/.gitkeep
 !data/clean/.gitkeep
 codebase_snapshot.txt
-codebase_snapshot.sh
 
 # IDEs and editors
 .idea/

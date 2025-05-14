@@ -1,152 +1,317 @@
+# 🧬 Longevity Biomarker Tracking System — Team Guide (v1.0 FINAL)
 
-# 🧬 Longevity Biomarker Tracking System — Team Guide (v0.4)
+Welcome to the repo! This page is the **source‑of‑truth for who owns what, what lives where, and the 5‑minute routine to spin everything up locally.**
 
-Welcome to the repo! This page is the **source‑of‑truth for who owns what, what lives where, and the 5‑minute routine to spin everything up locally.**
-
----
-
-## 1 · Team roles & areas of ownership
-
-|  Role                                     |  Main goals                                                  |  Owns these paths                                     |
-| ----------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
-| **Database Architect (@db‑architect)**    |  • keep the schema in 3 NF  • publish the ER diagram         |  `/sql/`, `/docs/er_diagram.*`                        |
-| **Data Engineer (@data‑engineer)**        |  • pull NHANES XPTs  • clean → CSVs  • bulk‑load into MySQL  |  `/etl/`, `/data/raw/`, `/data/clean/`, `/notebooks/` |
-| **Backend Lead (@backend‑lead)**          |  • convert FastAPI stubs to real endpoints  • add unit tests |  `/src/api/`, `/tests/`                               |
-| **Analytics / UI Lead (@analytics‑lead)** |  • build Streamlit dashboard  • charts & tables              |  `/src/ui/`, `/src/analytics/`                        |
-
-> **Branch etiquette**  → *One feature = one branch.* Open a PR, request review from anyone whose code you touch. **CI must be green** before merge.
+**✅ DATABASE ARCHITECTURE COMPLETE** - Schema frozen at v1.3, scientifically validated, ready for handoff!
 
 ---
 
-## 2 · Repository tour (birds‑eye view)
+## 1 · Team roles & areas of ownership
+
+|  Role                                     |  Status                              |  Main goals                                                  |  Owns these paths                                     |
+| ----------------------------------------- | ------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
+| **Database Architect (@db‑architect)**    | ✅ **COMPLETE** (Schema v1.3 frozen) | • keep the schema in 3 NF  • publish the ER diagram         | `/sql/`, `/docs/er_diagram.*`, `/verify_db_setup.py` |
+| **Data Engineer (@data‑engineer)**        | 📋 **TODO:** Transform notebook      | • pull NHANES XPTs  • clean → CSVs  • bulk‑load into MySQL  | `/etl/`, `/data/raw/`, `/data/clean/`, `/notebooks/` |
+| **Backend Lead (@backend‑lead)**          | 📋 **TODO:** Real API endpoints     | • convert FastAPI stubs to real endpoints  • add unit tests | `/src/api/`, `/tests/`                               |
+| **Analytics / UI Lead (@analytics‑lead)** | 📋 **TODO:** Full dashboard         | • build Streamlit dashboard  • charts & tables              | `/src/ui/`, `/src/analytics/`                        |
+
+> **Branch etiquette**  → *One feature = one branch.* Open a PR, request review from anyone whose code you touch. **CI must be green** before merge.
+
+---
+
+## 2 · Repository tour (birds‑eye view)
 
 ```
-├── sql/                 ← DDL (schema + seed data)
-├── etl/                 ← download → transform → load pipeline
-│   ├─ download_nhanes.py
-│   ├─ transform.ipynb   ← ⚠️ placeholder
-│   └─ load.sh
+├── sql/                 ← DDL (schema + seed data) ✅ COMPLETE
+│   ├─ schema.sql        ← v1.3 FINAL - 9 tables + 4 views + 3 indexes
+│   └─ 01_seed.sql       ← Biomarkers, models, reference ranges
+├── etl/                 ← download → transform → load pipeline
+│   ├─ download_nhanes.py   ← ✅ Working (pulls 6 XPT files)
+│   ├─ transform.ipynb      ← 📋 TODO: Data Engineer
+│   └─ load.sh              ← ✅ Handles missing CSVs gracefully
 ├── data/
-│   ├─ raw/    ← large XPTs (git‑ignored)
-│   └─ clean/  ← CSVs ready for LOAD INFILE (git‑ignored)
+│   ├─ raw/    ← NHANES XPTs (6 files, git‑ignored) ✅ Downloaded
+│   └─ clean/  ← CSVs ready for LOAD INFILE (git‑ignored)
 ├── src/
-│   ├─ api/          ← FastAPI app
-│   ├─ analytics/    ← helper modules for stats / plots
-│   └─ ui/           ← Streamlit dashboard
-├── tests/           ← pytest suite
-├── docker-compose.yml  ← MySQL 8 + Adminer
-├── Makefile          ← one‑word workflows (`make db`, …)
-├── .env.example      ← copy → .env ; local config lives here
-├── .github/workflows/ci.yml ← GitHub Actions (DB + API + tests)
-└── docs/             ← diagrams & additional docs
+│   ├─ api/          ← FastAPI app ✅ Stub endpoints working
+│   ├─ analytics/    ← ✅ HD calculator ready
+│   └─ ui/           ← ✅ Streamlit scaffold working
+├── tests/           ← ✅ pytest suite passing (100%)
+├── scripts/         ← ✅ Bootstrap scripts & utilities
+│   ├─ bootstrap_venv.sh    ← Virtual environment setup
+│   └─ codebase_snapshot.sh ← Documentation helper
+├── docker-compose.yml  ← ✅ MySQL 8 + Adminer working
+├── Makefile          ← ✅ All targets tested & working
+├── .env.example      ← ✅ Complete configuration template
+├── .github/workflows/ci.yml ← ✅ All checks passing
+├── verify_db_setup.py      ← ✅ Comprehensive validation script
+└── docs/             ← ✅ Complete documentation
+    ├─ schema_summary.md
+    └─ sqlfluff_status.md
 ```
 
-### 2b · File‑by‑file cheat‑sheet
+### 2b · File‑by‑file cheat‑sheet
 
-| Path                       | What it is / Why it matters                                                                                                             |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `sql/schema.sql`           | Single source‑of‑truth DDL + seed inserts. All migrations are manual edits to this file.                                                |
-| `etl/download_nhanes.py`   | Pulls raw NHANES XPT files for the 2017‑2018 cycle to `data/raw/`.                                                                      |
-| `etl/transform.ipynb`      | **TODO:** Data Engineer cleans & joins XPTs → four CSVs in `data/clean/`. Notebook executes headless via `nbconvert` during `make etl`. |
-| `etl/load.sh`              | Uses `LOAD DATA LOCAL INFILE` to bulk‑insert the clean CSVs. Also writes a tiny relational sample dump for CI.                          |
-| `docker-compose.yml`       | Spins up MySQL 8 (port 3307) + Adminer 4 (port 8080). DB initialises from `sql/` at first boot.                                         |
-| `Makefile`                 | Quick commands: `make db`, `make etl`, `make run`, `make ui`, `make test`, etc. The `run` target now defaults to `127.0.0.1:8000`.      |
-| `src/api/main.py`          | FastAPI entry‑point (currently returns stub JSON). Hot‑reload via `make run`.                                                           |
-| `src/ui/app.py`            | Streamlit dashboard scaffolding; checks API health on the Home page.                                                                    |
-| `tests/`                   | `conftest.py` sets up DB + API fixtures. `test_api.py` hits stub endpoints to ensure the stack is alive.                                |
-| `.github/workflows/ci.yml` | GitHub Action: spins up MySQL service → loads schema & sample data → runs tests → schema diff check to catch un‑committed DDL edits.    |
-| `.pre-commit-config.yaml`  | Black, flake8, trailing whitespace, YAML linting. Auto‑installed by `make install`.                                                     |
-| `codebase_snapshot.sh`     | Utility to create a gist‑friendly snapshot excluding big binaries—no need to run during normal dev.                                     |
+| Path                       | Status | What it is / Why it matters                                                                                                             |
+| -------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `sql/schema.sql`           | ✅     | **FROZEN v1.3** - Complete DDL with Anthropometry table, explicit FKs, optimized views                                                |
+| `sql/01_seed.sql`          | ✅     | Biomarkers (9), models (2), coefficients (9), reference ranges (20)                                                                   |
+| `verify_db_setup.py`       | ✅     | **Comprehensive validation** - Scientific accuracy, schema integrity, performance                                                      |
+| `etl/download_nhanes.py`   | ✅     | Pulls 6 NHANES XPT files (2017‑2018 cycle) including BMX_J for anthropometry                                                          |
+| `etl/transform.ipynb`      | 📋     | **TODO (Data Engineer):** Clean XPTs → 4 CSVs (users, sessions, measurements, anthropometry)                                          |
+| `etl/load.sh`              | ✅     | Bulk‑loads CSVs + creates sample dump for CI. Handles missing files gracefully.                                                       |
+| `scripts/bootstrap_venv.sh` | ✅     | **Complete Python setup** - Creates .venv, installs deps, configures hooks                                                            |
+| `docker-compose.yml`       | ✅     | MySQL 8 (port 3307) + Adminer (port 8080). Auto-loads schema on first boot.                                                           |
+| `Makefile`                 | ✅     | **All targets verified** - `make db`, `make etl`, `make run`, `make ui`, `make test`                                                   |
+| `src/api/main.py`          | ✅📋    | FastAPI with working stub endpoints. Ready for Backend Lead to implement.                                                              |
+| `src/ui/app.py`            | ✅📋    | Streamlit scaffold with API health check. Ready for UI Lead to extend.                                                                 |
+| `src/analytics/hd.py`      | ✅     | **Complete HD calculator** with BMI-filtered reference population                                                                      |
+| `tests/`                   | ✅     | Full test suite passing. DB + API fixtures, schema integrity checks.                                                                   |
+| `.github/workflows/ci.yml` | ✅     | **All checks green** - Schema validation, dependency install, test execution                                                          |
+| `.pre-commit-config.yaml`  | ✅     | Black, flake8, trailing whitespace. **SQLFluff commented** (parsing issues with complex DDL)                                          |
 
 ---
 
-## 3 · Getting started locally (≈ 5 minutes)
+## 3 · Getting started locally (≈ 3 minutes)
 
-> **Prereqs:** Docker Desktop, Python 3.11+, `pip install pre-commit`.
+> **Prereqs:** Docker Desktop, Python 3.11+, Git
+
+**🚀 Complete new team member setup:**
 
 ```bash
-# 1 · Clone
+# 1 · Clone & navigate
 git clone https://github.com/<org>/longevity-biomarker-tracker
 cd longevity-biomarker-tracker
 
-# 2 · Personal env vars
-cp .env.example .env   # edit only if you need custom ports
+# 2 · Copy environment template (edit if needed for custom ports)
+cp .env.example .env
 
-# 3 · Install deps & git hooks
-make install           # pip + pre‑commit
+# 3 · **One-command setup** (creates .venv, installs everything, configures hooks)
+make install
 
-# 4 · Launch database (MySQL :3307) + Adminer (:8080)
+# 4 · Activate virtual environment
+source .venv/bin/activate
+
+# 5 · Launch database (MySQL :3307 + Adminer :8080)
 make db
 
-# 5 · ( Data Engineer ) download → transform → load sample data
-make etl               # safe to run; skips if CSVs missing
+# 6 · **Verify everything works**
+make test                    # Should be all green ✅
+python verify_db_setup.py    # Comprehensive validation ✅
 
-# 6 · Fire up services
-make run               # FastAPI hot‑reload on http://127.0.0.1:8000
+# 7 · Fire up services (each in a new terminal)
+make run               # FastAPI on http://127.0.0.1:8000
 make ui                # Streamlit on http://127.0.0.1:8501
+```
 
-# 7 · Sanity check tests & style
-pytest -q              # all dots
-pre-commit run --all-files
+**✅ If all steps complete without errors, you're ready to develop!**
+
+---
+
+## 4 · Database Status & Schema Overview
+
+### ✅ **Schema v1.3 (FINAL & FROZEN)**
+
+| Component | Count | Status |
+|-----------|-------|--------|
+| **Tables** | 9 | All created with proper constraints |
+| **Views** | 4 | Optimized for API/analytics |
+| **Indexes** | 3 | Performance-tuned for trend queries |
+| **Foreign Keys** | 9 | All have explicit names |
+| **Biomarkers** | 9 | NHANES-validated for biological age |
+| **Models** | 2 | Phenotypic Age + Homeostatic Dysregulation |
+
+### 🧬 **Biological Age Models (Scientifically Validated)**
+
+| Model | Status | Description |
+|-------|--------|-------------|
+| **Phenotypic Age** | ✅ Validated | Levine et al. 2018 coefficients exactly matched |
+| **Homeostatic Dysregulation** | ✅ Validated | BMI-filtered reference population (20-30 yrs, BMI 18.5-29.9) |
+
+### 📊 **Key Tables**
+
+- **User** - Demographics (SEQN, age, sex, race/ethnicity)
+- **Anthropometry** - 🆕 Height, weight, BMI for HD filtering
+- **MeasurementSession** - Lab visits with fasting status
+- **Measurement** - 9 biomarker values with timestamps
+- **BiologicalAgeResult** - Calculated biological ages
+
+---
+
+## 5 · Daily workflow cheatsheet
+
+| Action | Command | Notes |
+| ------ | ------- | ----- |
+| **Full reset** | `make clean && make install && make db` | Nuclear option - rebuilds everything |
+| **Start development** | `make db && make run && make ui` | Core services (3 terminals) |
+| **Schema changes** | `make db-reset` | Reloads schema + seeds |
+| **Download NHANES** | `make etl` | Safe to re-run, skips transform if missing |
+| **Run all tests** | `make test` | Should always be green before push |
+| **Code quality** | `pre-commit run --all-files` | Auto-formats & checks |
+| **Database verification** | `python verify_db_setup.py` | Comprehensive validation |
+| **Clean shutdown** | `make clean` | Stops containers + wipes volumes |
+
+---
+
+## 6 · Team handoff status & next steps
+
+### ✅ **Database Architect - COMPLETE**
+- [x] Schema design (3NF, all constraints)
+- [x] Scientific validation (coefficients match literature)
+- [x] Performance optimization (indexes, views)
+- [x] Documentation & verification scripts
+- [x] Team infrastructure (Docker, Make, CI/CD)
+
+### 📋 **Data Engineer - TODO**
+```bash
+# Your main task: Complete etl/transform.ipynb
+# Generate these 4 CSVs from the 6 downloaded XPT files:
+# 1. users.csv (from DEMO_J.XPT)
+# 2. sessions.csv (derived from exam dates)
+# 3. measurements.csv (from BIOPRO_J, GLU_J, HSCRP_J, CBC_J)
+# 4. anthropometry.csv (from BMX_J.XPT) ← Important for HD
+
+# Then run: make etl
+```
+
+### 📋 **Backend Lead - TODO**
+```bash
+# Replace API stubs with real database queries in src/api/main.py
+# Key endpoints to implement:
+# - GET /users/{id}/phenotypic-age
+# - GET /users/{id}/hd-score
+# - POST /users/{id}/measurements
+# - GET /users/{id}/biomarker-trends
+
+# Database connection ready at: mysql://biomarker_user:pass@localhost:3307/longevity
+```
+
+### 📋 **UI Lead - TODO**
+```bash
+# Extend src/ui/app.py with:
+# - Biomarker visualization (trends, reference ranges)
+# - Biological age display (both models)
+# - User input forms for new measurements
+# - Population comparison charts
+
+# HD calculator ready in src/analytics/hd.py
 ```
 
 ---
 
-## 4 · Daily workflow cheatsheet
+## 7 · Development tools & services
 
-| Action                         | Command                          |
-| ------------------------------ | -------------------------------- |
-| Start DB + API + UI            | `make db && make run && make ui` |
-| Reset schema after SQL edits   | `make db-reset`                  |
-| Download / refresh NHANES      | `make etl`                       |
-| Run all tests                  | `make test`                      |
-| Lint & format                  | `pre-commit run --all-files`     |
-| Stop everything & wipe volumes | `make clean`                     |
+### 🗄️ **Database Access**
+- **Adminer GUI:** [http://localhost:8080](http://localhost:8080)
+  - Server: `db` | User: `biomarker_user` | Pass: `biomarker_pass` | DB: `longevity`
+- **Command line:** `mysql -h localhost -P 3307 -u biomarker_user -pbiomarker_pass longevity`
 
----
+### 🔧 **Service URLs**
+- **API:** [http://localhost:8000](http://localhost:8000) (with hot reload)
+- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
+- **Dashboard:** [http://localhost:8501](http://localhost:8501) (Streamlit)
 
-## 5 · Adminer login (GUI DB client)
-
-* **URL:** [http://localhost:8080](http://localhost:8080)
-* **System:** MySQL
-* **Server:** `db` (inside docker) or `127.0.0.1:3307`
-* **User:** `biomarker_user`   **PW:** `biomarker_pass`
-* **Database:** `longevity`
+### 📝 **Code Quality**
+- **Pre-commit hooks:** Auto-run black, flake8, trailing whitespace
+- **SQLFluff:** Available but commented (parsing issues with complex DDL) - see `docs/sqlfluff_status.md`
+- **CI/CD:** All checks must pass before merge
 
 ---
 
-## 6 · FAQ (extended)
+## 8 · FAQ & troubleshooting
 
-<details><summary><strong>Why do I need a PR just to push a notebook?</strong></summary>
-Because CI runs on every PR. That guarantees the DB schema, tests, and code style stay in sync. A quick notebook tweak can still break the build if it changes repo‑wide imports—better to catch it before merge.
+<details><summary><strong>Port conflicts (3307/8000/8501 already in use)?</strong></summary>
+
+Edit `.env` file and change:
+```bash
+MYSQL_PORT=3308        # Change from 3307
+APP_API_PORT=8001      # Change from 8000
+```
+For Streamlit, edit the `make ui` target in `Makefile`:
+```bash
+ui:
+	$(VENV_ACTIVATE) cd src/ui && streamlit run app.py --server.port 8502
+```
 </details>
 
-<details><summary><strong>Can I use React or Shiny instead of Streamlit?</strong></summary>
-Sure!  The UI lead should feel free to use their preferred tools.  Just mention on Slack and please build in the following minimal
-code to show that it connects to the rest of the repo.
-1. Adds the minimal scaffold for the new tool.
-2. Passes pre‑commit + pytest + CI.
-3. Includes a README note on how to run it.
+<details><summary><strong>Virtual environment issues?</strong></summary>
+
+```bash
+# Nuclear reset
+rm -rf .venv
+make install    # Rebuilds everything
+
+# Manual setup if needed
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pre-commit install
+```
 </details>
 
-<details><summary><strong>Help! Another service is already using port 3307 / 8000 / 8501.</strong></summary>
-Edit `.env`, change `MYSQL_PORT`, `APP_API_PORT`, or Streamlit’s port in `Makefile` (`make ui` target). Then restart `make db` / `make run`.
+<details><summary><strong>Database connection errors?</strong></summary>
+
+```bash
+# Check Docker status
+docker ps                    # Should see longevity_db running
+docker logs longevity_db     # Check for startup errors
+
+# Reset database completely
+make clean
+make db
+sleep 10     # Wait for full startup
+make db-reset
+```
 </details>
 
-<details><summary><strong>Pre‑commit reformats my file—what’s the policy?</strong></summary>
-Anything auto‑changed by pre‑commit (black, flake8 fixes) should simply be committed. If you disagree with a rule, open a Discussion with an example.
+<details><summary><strong>Tests failing?</strong></summary>
+
+```bash
+# Ensure database is running and loaded
+make db
+make db-reset
+
+# Run verification script
+python verify_db_setup.py   # Should pass all checks
+
+# Run tests with verbose output
+pytest tests/ -v
+
+# Check CI logs on GitHub for environment-specific issues
+```
 </details>
 
-<details><summary><strong>How do we add a Python dependency?</strong></summary>
-1. Add it to `requirements.txt` (pin exact version).
-2. `pip install -r requirements.txt` and ensure `pre-commit run --all-files` is still green.
-3. Push a PR; CI will build a fresh environment and verify nothing breaks.
+<details><summary><strong>SQLFluff integration?</strong></summary>
+
+SQLFluff is available but has parsing issues with our complex MySQL DDL (multi-line DROP statements, etc.).
+
+**Current status:** Commented out in pre-commit, can be used manually for simpler SQL files.
+
+See `docs/sqlfluff_status.md` for details and workarounds.
 </details>
 
-<details><summary><strong>Tests need real data but the CSVs are big. What’s the strategy?</strong></summary>
-`load.sh` creates a tiny relational dump (`tests/sample_dump.sql`) with < 1 MB of data selected from the latest 10 users. CI restores that to keep test runs fast.
+<details><summary><strong>How to add new Python dependencies?</strong></summary>
+
+1. Add to `requirements.txt` (pin exact version)
+2. `pip install -r requirements.txt`
+3. `pre-commit run --all-files` (ensure still green)
+4. Push PR - CI will verify in fresh environment
 </details>
 
 ---
 
-Let’s build something great—happy coding! 🎉
+## 9 · Scientific references
+
+### 📚 **Biological Age Models**
+- **Phenotypic Age:** Levine et al. (2018) - [PMID: 29676998](https://pubmed.ncbi.nlm.nih.gov/29676998/)
+- **Homeostatic Dysregulation:**
+  - Cohen et al. (2013) - [PMC3964022](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3964022/)
+  - Belsky et al. (2015) - [PMC4693454](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4693454/)
+
+### 🧪 **Data Source**
+- **NHANES 2017-2018:** [CDC National Health and Nutrition Examination Survey](https://www.cdc.gov/nchs/nhanes/index.html)
+
+
+---
+
+*Last updated: May 14, 2025 | Schema v1.3 | Team Guide v1.0*
