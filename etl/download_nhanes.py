@@ -20,6 +20,7 @@ urls = {
     "GLU_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/GLU_J.XPT",
     "HSCRP_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/HSCRP_J.XPT",
     "CBC_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/CBC_J.XPT",
+    "BMX_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/BMX_J.XPT",
 }
 
 

@@ -1,13 +1,13 @@
--- Longevity Biomarker Tracker · database schema
+-- Longevity Biomarker Tracker · database schema (v1.3 - WITH ANTHROPOMETRY)
 -- ================================================================
--- NOTE: pure DDL – no INSERTs, no seed data.  Seed rows now live in
---       sql/01_seed.sql so we can diff structure vs data separately
+-- FINAL schema including Anthropometry table for BMI-based HD filtering
 -- ================================================================
 
 /* --------- housekeeping (idempotent) --------- */
 DROP TABLE IF EXISTS BiologicalAgeResult;
 DROP TABLE IF EXISTS ModelUsesBiomarker;
 DROP TABLE IF EXISTS BiologicalAgeModel;
+DROP TABLE IF EXISTS Anthropometry;
 DROP TABLE IF EXISTS ReferenceRange;
 DROP TABLE IF EXISTS Measurement;
 DROP TABLE IF EXISTS Biomarker;
@@ -32,7 +32,7 @@ CREATE TABLE MeasurementSession (
     FastingStatus  BOOLEAN,
     CreatedAt   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY  (UserID, SessionDate),
-    FOREIGN KEY (UserID) REFERENCES User(UserID)
+    CONSTRAINT fk_session_user FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE
 );
 
 /* --------- Biomarker --------- */
@@ -54,8 +54,21 @@ CREATE TABLE Measurement (
     TakenAt       TIMESTAMP     NOT NULL,
     CreatedAt     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY  (SessionID, BiomarkerID),
-    FOREIGN KEY (SessionID)   REFERENCES MeasurementSession(SessionID),
-    FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID)
+    CONSTRAINT fk_measurement_session FOREIGN KEY (SessionID) REFERENCES MeasurementSession(SessionID) ON DELETE CASCADE,
+    CONSTRAINT fk_measurement_biomarker FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID) ON DELETE RESTRICT
+);
+
+/* --------- Anthropometry (NEW) --------- */
+CREATE TABLE Anthropometry (
+    AnthroID     INT AUTO_INCREMENT PRIMARY KEY,
+    UserID       INT NOT NULL,
+    ExamDate     DATE NOT NULL,
+    HeightCM     DECIMAL(5,2),
+    WeightKG     DECIMAL(5,2),
+    BMI          DECIMAL(5,2),
+    CreatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY (UserID, ExamDate),
+    CONSTRAINT fk_anthro_user FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE
 );
 
 /* --------- ReferenceRange --------- */
@@ -63,14 +76,14 @@ CREATE TABLE ReferenceRange (
     RangeID     INT AUTO_INCREMENT PRIMARY KEY,
     BiomarkerID INT NOT NULL,
     RangeType   ENUM('clinical','longevity') NOT NULL,
-    Sex         ENUM('M','F','All'),
-    AgeMin      INT,
-    AgeMax      INT,
+    Sex         ENUM('M','F','All') DEFAULT 'All',
+    AgeMin      INT DEFAULT 0,
+    AgeMax      INT DEFAULT 200,
     MinVal      DECIMAL(12,4),
     MaxVal      DECIMAL(12,4),
     CreatedAt   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY  (BiomarkerID, RangeType, Sex, AgeMin, AgeMax),
-    FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID)
+    CONSTRAINT fk_range_biomarker FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID) ON DELETE RESTRICT
 );
 
 /* --------- BiologicalAgeModel --------- */
@@ -90,8 +103,8 @@ CREATE TABLE ModelUsesBiomarker (
     Transform   VARCHAR(50),
     CreatedAt   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (ModelID, BiomarkerID),
-    FOREIGN KEY (ModelID)     REFERENCES BiologicalAgeModel(ModelID),
-    FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID)
+    CONSTRAINT fk_model_uses_model FOREIGN KEY (ModelID) REFERENCES BiologicalAgeModel(ModelID) ON DELETE CASCADE,
+    CONSTRAINT fk_model_uses_biomarker FOREIGN KEY (BiomarkerID) REFERENCES Biomarker(BiomarkerID) ON DELETE RESTRICT
 );
 
 /* --------- BiologicalAgeResult --------- */
@@ -103,6 +116,88 @@ CREATE TABLE BiologicalAgeResult (
     ComputedAt   TIMESTAMP NOT NULL,
     CreatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY (UserID, ModelID, ComputedAt),
-    FOREIGN KEY (UserID)  REFERENCES User(UserID),
-    FOREIGN KEY (ModelID) REFERENCES BiologicalAgeModel(ModelID)
+    CONSTRAINT fk_bio_age_user FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE,
+    CONSTRAINT fk_bio_age_model FOREIGN KEY (ModelID) REFERENCES BiologicalAgeModel(ModelID) ON DELETE RESTRICT
 );
+
+/* --------- Analytics Indexes --------- */
+-- Covering index for trend queries
+CREATE INDEX idx_measurement_trend ON Measurement(UserID, BiomarkerID, TakenAt, Value);
+
+-- Index for biomarker value analysis
+CREATE INDEX idx_measurement_bio_value ON Measurement(BiomarkerID, Value);
+
+-- Index for biological age results queries
+CREATE INDEX idx_bio_age_user_model ON BiologicalAgeResult(UserID, ModelID, ComputedAt);
+
+-- Index for anthropometry BMI lookups (covered by UNIQUE key, no additional index needed)
+
+/* --------- Optimized Views for API/Analytics --------- */
+-- View for latest measurement per biomarker per user
+CREATE VIEW v_user_latest_measurements AS
+SELECT m.UserID, m.BiomarkerID, m.Value, m.TakenAt, b.Name as BiomarkerName, b.Units
+FROM Measurement m
+JOIN Biomarker b ON m.BiomarkerID = b.BiomarkerID
+JOIN (
+    SELECT UserID, BiomarkerID, MAX(TakenAt) as LatestAt
+    FROM Measurement
+    GROUP BY UserID, BiomarkerID
+) latest ON m.UserID = latest.UserID
+    AND m.BiomarkerID = latest.BiomarkerID
+    AND m.TakenAt = latest.LatestAt;
+
+-- View for biomarkers with reference ranges
+CREATE VIEW v_biomarker_ranges AS
+SELECT
+    b.BiomarkerID,
+    b.Name,
+    b.Units,
+    rr.RangeType,
+    rr.Sex,
+    rr.AgeMin,
+    rr.AgeMax,
+    rr.MinVal,
+    rr.MaxVal
+FROM Biomarker b
+LEFT JOIN ReferenceRange rr ON b.BiomarkerID = rr.BiomarkerID
+ORDER BY b.BiomarkerID, rr.RangeType;
+
+-- HD Reference population candidates (COMPLETE with BMI filter)
+CREATE VIEW v_hd_reference_candidates AS
+SELECT
+    u.UserID,
+    u.SEQN,
+    u.Sex,
+    YEAR(CURDATE()) - YEAR(u.BirthDate) as Age,
+    a.BMI,
+    a.HeightCM,
+    a.WeightKG,
+    a.ExamDate
+FROM User u
+JOIN Anthropometry a ON u.UserID = a.UserID
+WHERE u.BirthDate IS NOT NULL
+    AND YEAR(CURDATE()) - YEAR(u.BirthDate) BETWEEN 20 AND 30
+    AND a.BMI IS NOT NULL
+    AND a.BMI >= 18.5
+    AND a.BMI < 30.0
+    -- Healthy BMI range: 18.5-29.9 kg/m² (excludes underweight and obese)
+ORDER BY u.UserID;
+
+-- View for user anthropometry trends
+CREATE VIEW v_user_anthro_history AS
+SELECT
+    u.UserID,
+    u.SEQN,
+    a.ExamDate,
+    a.BMI,
+    a.HeightCM,
+    a.WeightKG,
+    CASE
+        WHEN a.BMI < 18.5 THEN 'Underweight'
+        WHEN a.BMI < 25.0 THEN 'Normal'
+        WHEN a.BMI < 30.0 THEN 'Overweight'
+        ELSE 'Obese'
+    END as BMI_Category
+FROM User u
+JOIN Anthropometry a ON u.UserID = a.UserID
+ORDER BY u.UserID, a.ExamDate;
