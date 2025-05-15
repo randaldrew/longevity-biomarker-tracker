@@ -70,6 +70,21 @@ Welcome to the repo! This page is the **source‑of‑truth for who owns what, w
 | `.github/workflows/ci.yml` | ✅     | **All checks green** - Schema validation, dependency install, test execution                                                          |
 | `.pre-commit-config.yaml`  | ✅     | Black, flake8, trailing whitespace. **SQLFluff commented** (parsing issues with complex DDL)                                          |
 
+### 2c · Demo data workflow
+
+| File | Purpose | Usage |
+|------|---------|-------|
+| `sql/demo_users.sql` | **6 demo personas** with realistic medical data | `make seed-demo` |
+| `make seed-demo` | Load demo users (101-106) into database | Run after `make db` |
+| `make verify-demo-data` | Check demo users loaded correctly | Quick validation |
+
+**Demo Users Quick Reference:**
+- **User 101:** Healthy 29F (bio-age 24) - Perfect for Q1, Q2, Q3, Q4
+- **User 103:** Wellness enthusiast 38F with **3 sessions** - Star of Q5, Q6, Q7 trends
+- **User 102:** Stressed executive 45M (bio-age 52) - Age acceleration demo
+
+⚠️ **Important:** Always run `make seed-demo` after `make db-reset`
+
 ---
 
 ## 3 · Getting started locally (≈ 3 minutes)
@@ -141,15 +156,13 @@ make ui                # Streamlit on http://127.0.0.1:8501
 ## 5 · Daily workflow cheatsheet
 
 | Action | Command | Notes |
-| ------ | ------- | ----- |
-| **Full reset** | `make clean && make install && make db` | Nuclear option - rebuilds everything |
-| **Start development** | `make db && make run && make ui` | Core services (3 terminals) |
-| **Schema changes** | `make db-reset` | Reloads schema + seeds |
-| **Download NHANES** | `make etl` | Safe to re-run, skips transform if missing |
-| **Run all tests** | `make test` | Should always be green before push |
-| **Code quality** | `pre-commit run --all-files` | Auto-formats & checks |
-| **Database verification** | `python verify_db_setup.py` | Comprehensive validation |
-| **Clean shutdown** | `make clean` | Stops containers + wipes volumes |
+|--------|---------|-------|
+| **Fresh start** | `make db && make seed-demo` | Database + demo users |
+| **Reset after schema changes** | `make db-reset && make seed-demo` | **Always re-seed after reset** |
+| **Start backend** | `make run` | FastAPI with demo data ready |
+| **Start frontend** | `make ui` | Streamlit with 6 users available |
+| **Verify demo data** | `make verify-demo-data` | Check 6 users loaded correctly |
+| **Run tests** | `make test` | Uses sample dump, not demo users |
 
 ---
 
@@ -298,13 +311,31 @@ See `docs/sqlfluff_status.md` for details and workarounds.
 4. Push PR - CI will verify in fresh environment
 </details>
 
+<details><summary><strong>Which demo user should I use for testing?</strong></summary>
+
+**Quick reference:**
+- **User 101:** All optimal values, perfect for "happy path" testing
+- **User 103:** 3 sessions of data, use for trend analysis (Q5, Q6, Q7)
+- **User 102:** Multiple abnormal values, good for edge cases
+- **See full persona table in query implementation guide**
+
+All demo users have UserIDs 101-106, SEQN 100001-100006.
+</details>
+
+<details><summary><strong>Why does my query return empty results?</strong></summary>
+
+Most likely you forgot to load demo data:
+```bash
+make seed-demo
+make verify-demo-data  # Should show 6 users
+
 ---
 
 ## 9 · Scientific references
 
 ### 📚 **Biological Age Models**
 - **Phenotypic Age:** Levine et al. (2018) - [PMID: 29676998](https://pubmed.ncbi.nlm.nih.gov/29676998/)
-- **Homeostatic Dysregulation:** 
+- **Homeostatic Dysregulation:**
   - Cohen et al. (2013) - [PMID: 23376244](https://pubmed.ncbi.nlm.nih.gov/23376244/)
   - Belsky et al. (2015) - [PMID: 26150497](https://pubmed.ncbi.nlm.nih.gov/26150497/) • [PMC4522793](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4522793/)
 

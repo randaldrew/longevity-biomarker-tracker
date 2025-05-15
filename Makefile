@@ -71,6 +71,16 @@ db-reset:
 	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(DB) < sql/schema.sql
 	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(DB) < sql/01_seed.sql
 
+# Load demo users for testing/demo
+seed-demo:
+	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(MYSQL_DATABASE) < sql/demo_users.sql
+	@echo "✅ Demo users loaded successfully"
+
+# Verify demo data loaded correctly
+verify-demo-data:
+	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(MYSQL_DATABASE) -e \
+		"SELECT u.UserID, u.SEQN, COUNT(DISTINCT s.SessionID) as Sessions, COUNT(DISTINCT m.BiomarkerID) as Biomarkers FROM User u LEFT JOIN MeasurementSession s ON u.UserID = s.UserID LEFT JOIN Measurement m ON s.SessionID = m.SessionID WHERE u.UserID BETWEEN 101 AND 106 GROUP BY u.UserID, u.SEQN ORDER BY u.UserID;"
+
 # ETL pipeline
 etl:
 	$(VENV_ACTIVATE) python etl/download_nhanes.py

@@ -143,7 +143,10 @@ CREATE INDEX Idx_Bio_Age_User_Model ON BiologicalAgeResult (UserID, ModelID, Com
 
 -- Index for anthropometry BMI lookups (covered by UNIQUE key, no additional index needed)
 
--- Index for anthropometry BMI lookups (covered by UNIQUE key, no additional index needed)
+/* --------- Performance Notes --------- */
+-- v_user_latest_measurements is a non-materialized view
+-- MySQL query planner merges it with base tables for optimal performance
+-- The covering index on Measurement supports both direct queries and view queries
 
 /* --------- Optimized Views for API/Analytics --------- */
 
