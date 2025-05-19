@@ -15,12 +15,13 @@ raw_dir.mkdir(parents=True, exist_ok=True)
 
 # URLs for the NHANES 2017-2018 (cycle J) XPT files we need
 urls = {
-    "DEMO_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/DEMO_J.XPT",
-    "BIOPRO_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/BIOPRO_J.XPT",
-    "GLU_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/GLU_J.XPT",
-    "HSCRP_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/HSCRP_J.XPT",
-    "CBC_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/CBC_J.XPT",
-    "BMX_J.XPT": "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/BMX_J.XPT",
+    "DEMO_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/DEMO_J.xpt",
+    "BIOPRO_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/BIOPRO_J.XPT",
+    "GLU_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/GLU_J.XPT",
+    "HSCRP_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/HSCRP_J.XPT",
+    "CBC_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/CBC_J.XPT",
+    "BMX_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/BMX_J.XPT",
+    "FASTQX_J.XPT": "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/FASTQX_J.XPT"
 }
 
 
