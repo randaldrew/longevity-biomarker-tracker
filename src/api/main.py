@@ -1,39 +1,70 @@
-"""Main entry point for API"""
+"""Main API module for the longevity biomarker tracker."""
+# above line required for flake8?
+
 from fastapi import FastAPI
+import mysql.connector
+import os
+from datetime import date
 
-app = FastAPI(
-    title="Longevity Biomarker API",
-    description="API for tracking biomarkers and calculating biological age",
-)
-
-
-@app.get("/")
-def read_root():
-    """Return API welcome message."""
-    return {"message": "Longevity Biomarker API"}
+DB_HOST = os.getenv("DB_HOST_LOCAL", "127.0.0.1")
+DB_PORT = int(os.getenv("DB_PORT_LOCAL", "3307"))
+DB_USER = os.getenv("MYSQL_USER", "biomarker_user")
+DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "biomarker_pass")
+DB_NAME = os.getenv("MYSQL_DATABASE", "longevity")
 
 
-@app.get("/users/{user_id}")
-def read_user(user_id: int):
-    """Return user information by ID."""
-    # Stub implementation for tests
-    return {
-        "UserID": user_id,
-        "SEQN": 10000 + user_id,
-        "Sex": "M",
-        "RaceEthnicity": "Sample",
-    }
+app = FastAPI()
 
 
-@app.get("/users/{user_id}/measurements")
-def read_measurements(user_id: int):
-    """Return measurements for a specific user."""
-    # Stub implementation for tests
-    return [{"MeasurementID": 1, "BiomarkerName": "Albumin", "Value": 4.5}]
+def get_cursor():
+    connection = mysql.connector.connect(
+        host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+    )
+    cursor = connection.cursor(dictionary=True)
+    return connection, cursor
 
 
-@app.get("/users/{user_id}/bio-age")
-def read_bio_age(user_id: int):
-    """Calculate and return biological age for a user."""
-    # Stub implementation for tests
-    return {"user_id": user_id, "bio_age_years": 45.0, "model_name": "Phenotypic Age"}
+@app.get("/api/v1/users/{userId}/profile")
+async def user_profile(userId: int):
+    connection, cursor = get_cursor()
+
+    query = """
+    SELECT
+        BiomarkerID AS biomarkerId,
+        BiomarkerName AS name,
+        Value AS value,
+        Units AS units,
+        TakenAt AS takenAt
+    FROM v_user_latest_measurements
+    WHERE UserID = %s
+    ORDER BY biomarkerId;
+    """
+    cursor.execute(query, (userId,))
+    biomarkers = cursor.fetchall()
+
+    query = """
+    SELECT
+        UserID AS userId,
+        SEQN AS seqn,
+        BirthDate AS birthDate,
+        Sex AS sex,
+        RaceEthnicity AS raceEthnicity,
+        Age AS age
+    FROM v_user_with_age
+    WHERE UserID = %s;
+    """
+    cursor.execute(query, (userId,))
+    user_data = cursor.fetchall()
+
+    biomarkers_formatted = []
+    for biomarker in biomarkers:
+        if isinstance(biomarker.get("takenAt"), date):
+            biomarker["takenAt"] = biomarker["takenAt"].strftime("%Y-%m-%d")
+        biomarkers_formatted.append(biomarker)
+
+    if user_data:
+        user_data = user_data[0]
+        if isinstance(user_data.get("birthDate"), date):
+            user_data["birthDate"] = user_data["birthDate"].strftime("%Y-%m-%d")
+
+    return {"user": user_data, "biomarkers": biomarkers_formatted}
