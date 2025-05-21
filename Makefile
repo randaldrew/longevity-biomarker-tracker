@@ -79,7 +79,7 @@ seed-demo:
 # Verify demo data loaded correctly
 verify-demo-data:
 	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(MYSQL_DATABASE) -e \
-		"SELECT u.UserID, u.SEQN, COUNT(DISTINCT s.SessionID) as Sessions, COUNT(DISTINCT m.BiomarkerID) as Biomarkers FROM User u LEFT JOIN MeasurementSession s ON u.UserID = s.UserID LEFT JOIN Measurement m ON s.SessionID = m.SessionID WHERE u.UserID BETWEEN 101 AND 106 GROUP BY u.UserID, u.SEQN ORDER BY u.UserID;"
+		"SELECT u.UserID, u.SEQN, COUNT(DISTINCT s.SessionID) as Sessions, COUNT(DISTINCT m.BiomarkerID) as Biomarkers FROM User u LEFT JOIN MeasurementSession s ON u.UserID = s.UserID LEFT JOIN Measurement m ON s.SessionID = m.SessionID WHERE u.SEQN BETWEEN 9900001 AND 9900006 GROUP BY u.UserID, u.SEQN ORDER BY u.UserID;"
 
 # ETL pipeline
 etl:
