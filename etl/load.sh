@@ -147,3 +147,4 @@ mysqldump_cmd Measurement \
 
 echo "Sample dump written to tests/sample_dump.sql"
 echo "Data loading completed successfully!"
+
