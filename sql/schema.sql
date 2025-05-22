@@ -235,6 +235,10 @@ ORDER BY U.UserID, A.ExamDate;
 /* --- Convenience view that adds Age on the fly --- */
 CREATE VIEW v_user_with_age AS
 SELECT
-    u.*,
-    TIMESTAMPDIFF(YEAR, u.BirthDate, CURDATE()) AS Age
-FROM User u;
+    UserID,
+    SEQN,
+    BirthDate,
+    Sex,
+    RaceEthnicity,
+    TIMESTAMPDIFF(YEAR, BirthDate, CURDATE()) AS Age
+FROM User;
