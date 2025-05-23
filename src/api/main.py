@@ -46,8 +46,8 @@ def root():
 # ---------------------------------------------------------------------
 # User-profile endpoints
 # ---------------------------------------------------------------------
-@app.get("/api/v1/users/{user_id}/profile")
-def user_profile(user_id: int, db=Depends(get_db)):
+@app.get("/api/v1/users/{userId}/profile")
+def user_profile(userId: int, db=Depends(get_db)):
     """Retrieve the user's profile and latest biomarker data"""
     with db.cursor() as cursor:
         # ---- basic user data --------------------------------------------------
@@ -63,7 +63,7 @@ def user_profile(user_id: int, db=Depends(get_db)):
             FROM User
             WHERE UserID = %s
             """,
-            (user_id,),
+            (userId,),
         )
         user = cursor.fetchone()
 
@@ -83,7 +83,7 @@ def user_profile(user_id: int, db=Depends(get_db)):
             WHERE UserID = %s
             ORDER BY BiomarkerID
             """,
-            (user_id,),
+            (userId,),
         )
         biomarkers = cursor.fetchall()
 
