@@ -93,7 +93,7 @@ def user_profile(userId: int, db=Depends(get_db)):
     return {"user": user, "biomarkers": biomarkers}
 
 
-@app.post("/api/v1/users/{userId}/bio-age/calculate")
+@app.get("/api/v1/users/{userId}/bio-age")
 def get_current_biological_age(userId: int, db=Depends(get_db)):
     """Query 3: Get Current Biological Age (agegap = biological age - chronological age)"""
     with db.cursor() as cursor:
@@ -111,6 +111,10 @@ def get_current_biological_age(userId: int, db=Depends(get_db)):
         """
         cursor.execute(query, (userId,))
         biological_ages = cursor.fetchall()
+        if not biological_ages:
+            raise HTTPException(
+                status_code=404, detail=f"No biological age results for user {userId}"
+            )
         for biological_age in biological_ages:
             if isinstance(biological_age.get("computedAt"), date):
                 biological_age["computedAt"] = biological_age["computedAt"].strftime(
@@ -119,6 +123,7 @@ def get_current_biological_age(userId: int, db=Depends(get_db)):
         return {"bioAges": biological_ages}
 
 
+@app.post("/api/v1/users/{userId}/bio-age/calculate")
 @app.post("/api/v1/users/{userId}/measurements", status_code=status.HTTP_201_CREATED)
 def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
     """Query 4: Add New Measurement"""
