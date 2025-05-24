@@ -83,14 +83,40 @@ def user_profile(userId: int, db=Depends(get_db)):
         cursor.execute(query, (userId,))
         biomarkers = cursor.fetchall()
 
-    if isinstance(user.get("BirthDate"), date):
-        user["BirthDate"] = user["BirthDate"].isoformat()
+    if isinstance(user.get("birthDate"), date):
+        user["birthDate"] = user["birthDate"].isoformat()
 
-    for b in biomarkers:
-        if isinstance(b.get("TakenAt"), date):
-            b["TakenAt"] = b["TakenAt"].isoformat()
+    for biomarker in biomarkers:
+        if isinstance(biomarker.get("takenAt"), date):
+            biomarker["takenAt"] = biomarker["takenAt"].isoformat()
 
     return {"user": user, "biomarkers": biomarkers}
+
+
+@app.post("/api/v1/users/{userId}/bio-age/calculate")
+def get_current_biological_age(userId: int, db=Depends(get_db)):
+    """Query 3: Get Current Biological Age (agegap = biological age - chronological age)"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            BiologicalAgeModel.ModelName AS modelName,
+            BiologicalAgeResult.BioAgeYears AS bioAgeYears,
+            BiologicalAgeResult.BioAgeYears - view_age.AGE AS ageGap,
+            BiologicalAgeResult.ComputedAt AS computedAt
+        FROM v_user_with_age view_age
+        JOIN BiologicalAgeResult ON view_age.UserID=BiologicalAgeResult.UserID
+        JOIN BiologicalAgeModel ON BiologicalAgeResult.ModelID=BiologicalAgeModel.ModelID
+        WHERE view_age.UserID = %s
+        ORDER BY BiologicalAgeResult.ModelID;
+        """
+        cursor.execute(query, (userId,))
+        biological_ages = cursor.fetchall()
+        for biological_age in biological_ages:
+            if isinstance(biological_age.get("computedAt"), date):
+                biological_age["computedAt"] = biological_age["computedAt"].strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+        return {"bioAges": biological_ages}
 
 
 @app.post("/api/v1/users/{userId}/measurements", status_code=status.HTTP_201_CREATED)
