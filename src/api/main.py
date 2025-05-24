@@ -123,7 +123,9 @@ def get_current_biological_age(userId: int, db=Depends(get_db)):
         return {"bioAges": biological_ages}
 
 
-@app.post("/api/v1/users/{userId}/bio-age/calculate")
+# @app.post("/api/v1/users/{userId}/bio-age/calculate")
+
+
 @app.post("/api/v1/users/{userId}/measurements", status_code=status.HTTP_201_CREATED)
 def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
     """Query 4: Add New Measurement"""
