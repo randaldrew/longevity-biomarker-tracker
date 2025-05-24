@@ -1,10 +1,10 @@
 """Longevity Biomarker API"""
 
-import os
 from datetime import date, datetime
-
-import pymysql
 from fastapi import FastAPI, Depends, HTTPException, Body, status
+import math
+import os
+import pymysql
 
 
 DB_HOST = os.getenv("MYSQL_HOST", "localhost")
@@ -37,18 +37,8 @@ def get_db():
         connection.close()
 
 
-@app.get("/")
-def root():
-    """Endpoint used by CI to confirm API is running"""
-    return {"message": "Longevity Biomarker API"}
-
-
-# ---------------------------------------------------------------------
-# User-profile endpoints
-# ---------------------------------------------------------------------
-@app.get("/api/v1/users/{userId}/profile")
-def user_profile(userId: int, db=Depends(get_db)):
-    """Query 2: Retrieve the user's profile and latest biomarker data"""
+def get_user_profile(userId: int, db):
+    """Retrieve the user's profile and latest biomarker data"""
     with db.cursor() as cursor:
         # ---- basic user data --------------------------------------------------
         query = """
@@ -93,6 +83,21 @@ def user_profile(userId: int, db=Depends(get_db)):
     return {"user": user, "biomarkers": biomarkers}
 
 
+@app.get("/")
+def root():
+    """Endpoint used by CI to confirm API is running"""
+    return {"message": "Longevity Biomarker API"}
+
+
+# ---------------------------------------------------------------------
+# User-profile endpoints
+# ---------------------------------------------------------------------
+@app.get("/api/v1/users/{userId}/profile")
+def user_profile(userId: int, db=Depends(get_db)):
+    """Query 2: Retrieve the user's profile and latest biomarker data"""
+    return get_user_profile(userId, db)
+
+
 @app.get("/api/v1/users/{userId}/bio-age")
 def get_current_biological_age(userId: int, db=Depends(get_db)):
     """Query 3: Get Current Biological Age (agegap = biological age - chronological age)"""
@@ -123,7 +128,89 @@ def get_current_biological_age(userId: int, db=Depends(get_db)):
         return {"bioAges": biological_ages}
 
 
-# @app.post("/api/v1/users/{userId}/bio-age/calculate")
+@app.post("/api/v1/users/{userId}/bio-age/calculate")
+def calculate_biological_age(
+    userId: int, body: dict = Body(default={"modelName": ""}), db=Depends(get_db)
+):
+    """Query 3.5: Calculate and Post Biological Age"""
+    models = {"Phenotypic Age": 1, "Homeostatic Dysregulation": 2}
+    if body.get("modelName"):
+        models_to_use = [body.get("modelName")]
+        if models_to_use[0] not in models.keys():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model"
+            )
+    else:
+        models_to_use = models.keys()  # by default use all models
+    user_profile = get_user_profile(userId, db)
+
+    with db.cursor() as cursor:
+        # ---- missing biomarkers -----------------------------------------
+        if len(user_profile["biomarkers"]) != 9:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Insufficient biomarker data for calculation",
+            )
+        biomarkers_dict = {
+            biomarker["biomarkerId"]: biomarker["value"]
+            for biomarker in user_profile["biomarkers"]
+        }
+
+        try:
+            for model in models_to_use:
+                computed_at = datetime.now()
+                bioAgeYears = None
+                # ---- Phenotypic Age -----------------------------------------
+                if model == "Phenotypic Age":
+                    query = """
+                    SELECT
+                        BiomarkerID AS biomarkerId,
+                        Coefficient AS coefficient,
+                        Transform AS transform
+                    FROM ModelUsesBiomarker
+                    """
+                    cursor.execute(query)
+                    phenotypic_coefficients = cursor.fetchall()
+                    phenotypic_age = 0
+                    for coefficient in phenotypic_coefficients:
+                        biomarker_value = float(
+                            biomarkers_dict[coefficient["biomarkerId"]]
+                        )
+                        if coefficient["transform"] == "log":
+                            biomarker_value = math.log(biomarker_value)
+                        phenotypic_age += biomarker_value * float(
+                            coefficient["coefficient"]
+                        )
+                    bioAgeYears = round(phenotypic_age, 2)
+                # ---- Hemostatic Dysregulation -----------------------------------------
+
+                # ---- Insert into BiologicalAgeResult -----------------------------------------
+                query = """
+                INSERT INTO BiologicalAgeResult(UserID, ModelID, BioAgeYears, ComputedAt, CreatedAt)
+                    VALUES(%s, %s, %s, %s, %s);
+                """
+                cursor.execute(
+                    query,
+                    (
+                        userId,
+                        models[model],
+                        bioAgeYears,
+                        computed_at.strftime("%Y-%m-%d %H:%M:%S"),
+                        computed_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    ),
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"error: {str(e)}",
+            )
+        db.commit()
+    return {
+        "modelName": model,
+        "bioAgeYears": bioAgeYears,
+        "ageGap": bioAgeYears - user_profile["user"]["age"],
+        "computedAt": computed_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
 
 
 @app.post("/api/v1/users/{userId}/measurements", status_code=status.HTTP_201_CREATED)
