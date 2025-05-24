@@ -36,6 +36,32 @@ if ! ls data/clean/*.csv >/dev/null 2>&1; then
   exit 0
 fi
 
+# ── Load reference ranges  ─────────────────────────
+
+# Clear existing reference ranges before loading new ones
+mysql --local-infile=1 -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+      -e "DELETE FROM ReferenceRange;"
+
+# Load reference ranges
+echo "Loading reference ranges..."
+mysql --local-infile=1 -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" << 'EOF'
+
+LOAD DATA LOCAL INFILE 'data/clean/reference_ranges.csv'
+INTO TABLE ReferenceRange
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n'
+IGNORE 3 LINES
+(BiomarkerID, RangeType, Sex, AgeMin, AgeMax, MinVal, MaxVal);
+
+EOF
+
+# Verify the load
+echo "Verifying reference ranges loaded..."
+mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+      "$MYSQL_DATABASE" -e "SELECT RangeType, COUNT(*) as count FROM ReferenceRange GROUP BY RangeType;"
+
 # ── Load USERS (BirthDate already patched) ─────────────────────────
 echo "Loading User ..."
 mysql_cmd -e "
@@ -147,4 +173,3 @@ mysqldump_cmd Measurement \
 
 echo "Sample dump written to tests/sample_dump.sql"
 echo "Data loading completed successfully!"
-
