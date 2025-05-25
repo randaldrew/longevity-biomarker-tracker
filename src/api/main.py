@@ -2,9 +2,20 @@
 
 from datetime import date, datetime
 from fastapi import FastAPI, Depends, HTTPException, Body, status
+from fastapi.middleware.cors import CORSMiddleware
 import math
 import os
+
+# import pandas as pd
 import pymysql
+
+# import sys
+
+
+# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+# from src.analytics.hd import HomeostasisDysregulation
 
 
 DB_HOST = os.getenv("MYSQL_HOST", "localhost")
@@ -17,6 +28,14 @@ DB_NAME = os.getenv("MYSQL_DATABASE", "longevity")
 app = FastAPI(
     title="Longevity Biomarker API",
     description="API for tracking biomarkers and calculating biological age",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -92,6 +111,32 @@ def root():
 # ---------------------------------------------------------------------
 # User-profile endpoints
 # ---------------------------------------------------------------------
+@app.get("/api/v1/users")
+def list_all_users(db=Depends(get_db)):
+    """Query 1: List All Users"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            view_age.UserID AS userId,
+            view_age.SEQN AS seqn,
+            view_age.Age AS age,
+            view_age.Sex AS sex,
+            view_age.RaceEthnicity AS raceEthnicity,
+            COUNT(DISTINCT MeasurementSession.SessionID) AS sessionCount
+        FROM
+            v_user_with_age view_age
+        LEFT JOIN
+            MeasurementSession ON view_age.UserID = MeasurementSession.UserID
+        GROUP BY
+            view_age.UserID, view_age.SEQN, view_age.Age, view_age.Sex, view_age.RaceEthnicity
+        ORDER BY
+            view_age.UserID;
+        """
+        cursor.execute(query)
+        all_users = cursor.fetchall()
+        return {"users": all_users}
+
+
 @app.get("/api/v1/users/{userId}/profile")
 def user_profile(userId: int, db=Depends(get_db)):
     """Query 2: Retrieve the user's profile and latest biomarker data"""
@@ -155,7 +200,6 @@ def calculate_biological_age(
             biomarker["biomarkerId"]: biomarker["value"]
             for biomarker in user_profile["biomarkers"]
         }
-
         try:
             for model in models_to_use:
                 computed_at = datetime.now()
@@ -168,21 +212,37 @@ def calculate_biological_age(
                         Coefficient AS coefficient,
                         Transform AS transform
                     FROM ModelUsesBiomarker
+                    WHERE ModelID = 1
                     """
                     cursor.execute(query)
                     phenotypic_coefficients = cursor.fetchall()
-                    phenotypic_age = 0
+                    linear_term = 0
                     for coefficient in phenotypic_coefficients:
                         biomarker_value = float(
                             biomarkers_dict[coefficient["biomarkerId"]]
                         )
+                        # Unit conversion for fasting glucose
+                        if coefficient["biomarkerId"] == 4:
+                            biomarker_value /= 18.0
                         if coefficient["transform"] == "log":
                             biomarker_value = math.log(biomarker_value)
-                        phenotypic_age += biomarker_value * float(
+                        linear_term += biomarker_value * float(
                             coefficient["coefficient"]
                         )
-                    bioAgeYears = round(phenotypic_age, 2)
-                # ---- Hemostatic Dysregulation -----------------------------------------
+                    chronological_age = user_profile["user"]["age"]
+                    mortality_score = (
+                        linear_term + math.log(chronological_age) * 0.0804 - 19.9067
+                    )
+                    R = min(0.999999, 1 - math.exp(-math.exp(mortality_score)))
+                    phenotypic_age = round(
+                        141.50 + math.log(-math.log(1 - R)) / 0.09165, 2
+                    )
+                    bioAgeYears = phenotypic_age
+
+                # ---- Homeostatic Dysregulation -----------------------------------------
+                # elif model == "Homeostatic Dysregulation":
+                #     hd_age = hd_model.calculate_hd(biomarkers_dict)
+                #     bioAgeYears = round(hd_age, 2)
 
                 # ---- Insert into BiologicalAgeResult -----------------------------------------
                 query = """
@@ -208,7 +268,7 @@ def calculate_biological_age(
     return {
         "modelName": model,
         "bioAgeYears": bioAgeYears,
-        "ageGap": bioAgeYears - user_profile["user"]["age"],
+        "ageGap": bioAgeYears - chronological_age,
         "computedAt": computed_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
