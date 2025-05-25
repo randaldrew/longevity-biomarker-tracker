@@ -74,6 +74,8 @@ jobs:
 
 
     - name: Start API server for testing
+      env:
+        DISABLE_HD: "true"
       run: |
         cd src/api
         nohup python -m uvicorn main:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
