@@ -10,6 +10,7 @@ import os
 import pymysql
 
 # import sys
+from typing import Optional
 
 
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -345,6 +346,40 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
         db.commit()
 
     return {"sessionId": new_session_id, "measurementIds": inserted_measurement_ids}
+
+
+@app.get("/api/v1/users/{userId}/bio-age/history")
+def get_biological_age_history(
+    userId: int, model: Optional[str] = None, db=Depends(get_db)
+):
+    """Query 7: Get Biological Age History"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            BiologicalAgeModel.ModelName as modelName,
+            BiologicalAgeResult.BioAgeYears as bioAgeYears,
+            BiologicalAgeResult.BioAgeYears - view_age.AGE AS ageGap,
+            BiologicalAgeResult.ComputedAt AS computedAt
+        FROM BiologicalAgeResult
+        JOIN BiologicalAgeModel ON BiologicalAgeResult.ModelID=BiologicalAgeModel.ModelID
+        JOIN v_user_with_age view_age ON BiologicalAgeResult.UserID = view_age.UserID
+        WHERE BiologicalAgeResult.UserID = %s
+        """
+        query_parameters = [userId]
+        if model in ["Phenotypic Age", "Homeostatic Dysregulation"]:
+            query += " AND BiologicalAgeModel.ModelName = %s"
+            query_parameters.append(model)
+        query += " ORDER BY BiologicalAgeResult.ComputedAt DESC;"
+
+        cursor.execute(query, tuple(query_parameters))
+        age_history = cursor.fetchall()
+
+        for history in age_history:
+            if isinstance(history.get("computedAt"), date):
+                history["computedAt"] = history["computedAt"].strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+        return {"history": age_history}
 
 
 # ---------------------------------------------------------------------
