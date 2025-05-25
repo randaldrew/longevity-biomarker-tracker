@@ -46,6 +46,11 @@ hd_model = None
 @app.on_event("startup")
 def startup():
     global hd_model
+
+    if os.getenv("DISABLE_HD", "").lower() in {"1", "true"}:
+        print("[INFO] HD model fitting skipped via DISABLE_HD flag.")
+        return
+
     connection = pymysql.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -321,9 +326,7 @@ def calculate_biological_age(
                     if hd_model is None:
                         raise HTTPException(
                             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detail="HD model unavailable (startup fit failed). "
-                            "Database may be unreachable or missing reference data. "
-                            "Try using Phenotypic Age model only.",
+                            detail="HD model unavailable, only Phenotypic Age model available",
                         )
 
                     user_biomarkers_named = {}
