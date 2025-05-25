@@ -533,7 +533,7 @@ def biomarker_trends(
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Input range must be in 'number> <days|weeks|months|years>' format",
+            detail="Input range must be in '<number> <days|weeks|months|years>' format",
         )
     range_days = 1 * days + 7 * weeks + 31 * months + 365 * years
     range_period = datetime.today() - timedelta(days=range_days)
