@@ -382,6 +382,52 @@ def get_biological_age_history(
         return {"history": age_history}
 
 
+@app.get("/apiv1/users/{userId}/sessions/{sessionId}")
+def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
+    """Query 8: Get Session Details"""
+    with db.cursor() as cursor:
+        # ---- session data --------------------------------------------------
+        query = """
+        SELECT
+            SessionID AS sessionId,
+            SessionDate AS sessionDate,
+            FastingStatus AS fastingStatus
+        FROM MeasurementSession
+        WHERE UserID = %s AND SessionID = %s
+        """
+        cursor.execute(
+            query,
+            (
+                userId,
+                sessionId,
+            ),
+        )
+        session_data = cursor.fetchone()
+        if not session_data:
+            raise HTTPException(status_code=404, detail="User's session not found")
+        if isinstance(session_data.get("sessionDate"), date):
+            session_data["sessionDate"] = session_data["sessionDate"].isoformat()
+        if session_data.get("fastingStatus"):
+            session_data["fastingStatus"] = (
+                True if session_data["fastingStatus"] else False
+            )
+        # ---- measurement data --------------------------------------------------
+        query = """
+        SELECT
+            BiomarkerID AS biomarkerID,
+            BiomarkerName AS name,
+            Value AS value,
+            Units AS units
+        FROM v_user_latest_measurements view_measurements
+        WHERE UserID = %s
+        """
+        cursor.execute(query, (userId,))
+        measurement_data = cursor.fetchall()
+        if not measurement_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session_data | {"measurements": measurement_data}
+
+
 # ---------------------------------------------------------------------
 # Test stub endpoints for pytest
 # ---------------------------------------------------------------------
