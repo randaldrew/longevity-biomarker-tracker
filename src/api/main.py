@@ -279,7 +279,7 @@ def calculate_biological_age(
 
 @app.post("/api/v1/users/{userId}/measurements", status_code=status.HTTP_201_CREATED)
 def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
-    """Query 4: Add New Measurement"""
+    """Query 4: Create new measurement session for specific date"""
     session_date = body.get("sessionDate")
     fasting_status = body.get("fastingStatus")
     measurements = body.get("measurements")
@@ -351,11 +351,56 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
     return {"sessionId": new_session_id, "measurementIds": inserted_measurement_ids}
 
 
+@app.get("/api/v1/users/{userId}/ranges")
+def reference_range_comparison(userId: int, type: str = "both", db=Depends(get_db)):
+    """Query 5: Compare each biomarker against clinical and longevity reference ranges"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            biomarkerId,
+            name,
+            value,
+            CASE
+                WHEN SUM(statusCounter)=2 THEN "Optimal"
+                WHEN SUM(statusCounter)=1 THEN "Normal"
+                ELSE "OutOfRange"
+                END AS status,
+            MAX(CASE
+                    WHEN rangeType="clinical" THEN valueRange
+                    END) AS clinicalRange,
+            MAX(CASE
+                    WHEN rangeType="longevity" THEN valueRange
+                    END) AS longevityRange
+
+        FROM(
+            SELECT
+                view_measurements.BiomarkerID AS biomarkerId,
+                view_measurements.BiomarkerName AS name,
+                view_measurements.Value AS value,
+                ReferenceRange.RangeType AS rangeType,
+                JSON_OBJECT("min", ReferenceRange.MinVal, "max", ReferenceRange.MaxVal) AS valueRange,
+                SUM(CASE
+                        WHEN (ReferenceRange.MinVal <= value) AND (value <= ReferenceRange.MaxVal) THEN 1
+                        ELSE 0
+                        END) AS statusCounter
+            FROM v_user_latest_measurements view_measurements
+            JOIN ReferenceRange ON view_measurements.BiomarkerID=ReferenceRange.BiomarkerID
+            JOIN User ON User.UserID=view_measurements.UserID
+            WHERE ReferenceRange.Sex in ("All", User.Sex) AND view_measurements.UserID = %s
+            GROUP BY biomarkerId, name, value, rangeType, valueRange
+            ) AS NestedTable
+        GROUP BY biomarkerId, name, value
+        """
+        cursor.execute(query, (userId,))
+        ranges = cursor.fetchall()
+        return {"ranges": ranges}
+
+
 @app.get("/api/v1/users/{userId}/bio-age/history")
 def get_biological_age_history(
     userId: int, model: Optional[str] = None, db=Depends(get_db)
 ):
-    """Query 7: Get Biological Age History"""
+    """Query 7: Show how biological age has changed over multiple calculations"""
     with db.cursor() as cursor:
         query = """
         SELECT
@@ -387,7 +432,7 @@ def get_biological_age_history(
 
 @app.get("/apiv1/users/{userId}/sessions/{sessionId}")
 def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
-    """Query 8: Get Session Details"""
+    """Query 8: Show all biomarkers measured in a specific lab session"""
     with db.cursor() as cursor:
         # ---- session data --------------------------------------------------
         query = """
@@ -431,7 +476,7 @@ def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
 
 @app.get("/api/v1/biomarkers")
 def biomarker_catalog(db=Depends(get_db)):
-    """Query 9: Available biomarkers list"""
+    """Query 9: Return all biomarkers with metadata"""
     with db.cursor() as cursor:
         query = """
         SELECT
@@ -449,7 +494,7 @@ def biomarker_catalog(db=Depends(get_db)):
 
 @app.get("/api/v1/biomarkers/{biomarkerId}/ranges")
 def biomarker_reference_ranges(biomarkerId: int, db=Depends(get_db)):
-    """Query 10: Reference Ranges for Biomarker"""
+    """Query 10: Get all reference ranges for specific biomarker"""
     with db.cursor() as cursor:
         query = """
         SELECT
