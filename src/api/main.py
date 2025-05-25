@@ -1,6 +1,6 @@
 """Longevity Biomarker API"""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, Body, status
 from fastapi.middleware.cors import CORSMiddleware
 import math
@@ -503,28 +503,60 @@ def reference_range_comparison(userId: int, type: str = "both", db=Depends(get_d
         return {"ranges": ranges}
 
 
-# @app.get("/api/v1/users/{userId}/biomarkers/{biomarkerId}/trend")
-# def biomarker_trends(
-#     userId: int,
-#     biomarkerId: int,
-#     limit: int = 20,
-#     range: str = "6months",
-#     db=Depends(get_db),
-# ):
-#     """Query 6: Show how biological age has changed over multiple calculations"""
-#     range = range.strip()
-#     number, text = "", ""
-#     for letter in range:
-#         if letter.isdigit():
-#             number += letter
-#         else:
-#             text += letter
-#     number, text = number.strip(), text.strip("s ")
+@app.get("/api/v1/users/{userId}/biomarkers/{biomarkerId}/trend")
+def biomarker_trends(
+    userId: int,
+    biomarkerId: int,
+    limit: int = 20,
+    range: str = "6months",
+    db=Depends(get_db),
+):
+    """Query 6: Show how biological age has changed over multiple calculations"""
+    # ----  parse input to calculate upto when the Biomarker should be queried -----------------------------------------
+    range = range.strip()
+    number, text = "", ""
+    for letter in range:
+        if letter.isdigit():
+            number += letter
+        else:
+            text += letter
+    number, text = int(number.strip()), text.strip("s ").lower()
+    years, months, weeks, days = 0, 0, 0, 0
+    if text in {"day", "d"}:
+        days = number
+    elif text in {"week", "w"}:
+        weeks = number
+    elif text in {"month", "m"}:
+        months = number
+    elif text in {"year", "y"}:
+        years = number
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Input range must be in '<number> <days|weeks|months|years>' format",
+        )
+    range_days = 1 * days + 7 * weeks + 31 * months + 365 * years
+    range_period = datetime.today() - timedelta(days=range_days)
 
-#     with db.cursor() as cursor:
-#         query = """
-
-#         """
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            MeasurementSession.SessionDate AS date,
+            Measurement.Value AS value,
+            Measurement.SessionID AS sessionId
+        FROM Measurement
+        JOIN MeasurementSession ON Measurement.SessionID=MeasurementSession.SessionID
+        WHERE MeasurementSession.UserID=%s AND Measurement.BiomarkerID=%s AND MeasurementSession.SessionDate > %s
+        LIMIT %s
+        """
+        cursor.execute(query, (userId, biomarkerId, range_period, limit))
+        trend = cursor.fetchall()
+    if not trend:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No measurements for this biomarker: {biomarkerId}, user: {userId}, within {range_days} days",
+        )
+    return {"trend": trend}
 
 
 @app.get("/api/v1/users/{userId}/bio-age/history")
