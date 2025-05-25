@@ -105,7 +105,7 @@ def startup():
 
     except Exception as e:
         print(f"error: failed to initialize HD model on startup: {str(e)}")
-        raise
+        hd_model = None
     finally:
         connection.close()
 
@@ -316,6 +316,14 @@ def calculate_biological_age(
 
                 # ---- Homeostatic Dysregulation -----------------------------------------
                 elif model == "Homeostatic Dysregulation":
+                    if hd_model is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="HD model unavailable (startup fit failed). "
+                            "Database may be unreachable or missing reference data. "
+                            "Try using Phenotypic Age model only.",
+                        )
+
                     user_biomarkers_named = {}
                     for biomarker_id, (
                         biomarker_value,
@@ -488,6 +496,19 @@ def reference_range_comparison(userId: int, type: str = "both", db=Depends(get_d
         cursor.execute(query, (userId,))
         ranges = cursor.fetchall()
         return {"ranges": ranges}
+
+
+# @app.get("/api/v1/users/{userId}/biomarkers/{biomarkerId}/trend")
+# def biomarker_trends(userId: int, biomarkerId: int, limit: int=20, range: str="6months", db=Depends(get_db)):
+#     """Query 6: Show how biological age has changed over multiple calculations"""
+#     range = range.strip()
+#     number, text = "", ""
+#     for letter in range:
+#         if letter.isdigit():
+#             number += letter
+#         else:
+#             text += letter
+#     number, text = number.strip(), text.strip("s ")
 
 
 @app.get("/api/v1/users/{userId}/bio-age/history")
