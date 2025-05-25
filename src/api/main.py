@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import os
 
-# import pandas as pd
+import pandas as pd
 import pymysql
 import sys
 from typing import Optional
@@ -16,7 +16,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# from src.analytics.hd import HomeostasisDysregulation
+from src.analytics.hd import HomeostasisDysregulation
 
 
 DB_HOST = os.getenv("MYSQL_HOST", "localhost")
@@ -43,72 +43,73 @@ app.add_middleware(
 hd_model = None
 
 
-# @app.on_event("startup")
-# def startup():
-#     global hd_model
-#     connection = pymysql.connect(
-#         host=DB_HOST,
-#         port=DB_PORT,
-#         user=DB_USER,
-#         password=DB_PASSWORD,
-#         db=DB_NAME,
-#         cursorclass=pymysql.cursors.DictCursor,
-#         autocommit=False,
-#     )
-#     try:
-#         with connection.cursor() as cursor:
-#             query = """
-#             SELECT
-#                 view_reference.UserID,
-#                 view_reference.Age,
-#                 view_reference.BMI,
-#                 view_reference.Sex,
-#                 view_measurements.BiomarkerID,
-#                 view_measurements.BiomarkerName,
-#                 view_measurements.Value
-#             FROM v_hd_reference_candidates view_reference
-#             JOIN v_user_latest_measurements view_measurements ON view_reference.UserID=view_measurements.userID
-#             WHERE view_measurements.BiomarkerID BETWEEN 1 AND 9
-#             """
-#             cursor.execute(query)
-#             reference_df = cursor.fetchall()
-#         if not reference_df:
-#             raise RuntimeError("No reference population available for HD calculation")
+@app.on_event("startup")
+def startup():
+    global hd_model
+    connection = pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        db=DB_NAME,
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=False,
+    )
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            SELECT
+                view_reference.UserID,
+                view_reference.Age,
+                view_reference.BMI,
+                view_reference.Sex,
+                view_measurements.BiomarkerID,
+                view_measurements.BiomarkerName,
+                view_measurements.Value
+            FROM v_hd_reference_candidates view_reference
+            JOIN v_user_latest_measurements view_measurements ON view_reference.UserID=view_measurements.userID
+            WHERE view_measurements.BiomarkerID BETWEEN 1 AND 9
+            """
+            cursor.execute(query)
+            reference_df = cursor.fetchall()
+        if not reference_df:
+            # raise RuntimeError("No reference population available for HD calculation")
+            print("No reference population available for HD calculation")
 
-#         reference_df = pd.DataFrame(reference_df)
+        reference_df = pd.DataFrame(reference_df)
 
-#         # Convert all decimal.Decimal columns to float
-#         reference_df["Value"] = reference_df["Value"].astype(float)
-#         reference_df["BMI"] = reference_df["BMI"].astype(float)
+        # Convert all decimal.Decimal columns to float
+        reference_df["Value"] = reference_df["Value"].astype(float)
+        reference_df["BMI"] = reference_df["BMI"].astype(float)
 
-#         # Unit conversion: mg/dL → mmol/L
-#         glucose_mask = reference_df["BiomarkerID"] == 4
-#         reference_df["Value"].loc[glucose_mask] = (
-#             reference_df["Value"].loc[glucose_mask] / 18
-#         )
-#         biomarker_columns = reference_df["BiomarkerName"].unique()
+        # Unit conversion: mg/dL → mmol/L
+        glucose_mask = reference_df["BiomarkerID"] == 4
+        reference_df["Value"].loc[glucose_mask] = (
+            reference_df["Value"].loc[glucose_mask] / 18
+        )
+        biomarker_columns = reference_df["BiomarkerName"].unique()
 
-#         # Pivot to get biomarkers as columns
-#         reference_df = reference_df.pivot_table(
-#             index=["UserID", "Age", "BMI", "Sex"],
-#             columns="BiomarkerName",
-#             values="Value",
-#         ).reset_index()
+        # Pivot to get biomarkers as columns
+        reference_df = reference_df.pivot_table(
+            index=["UserID", "Age", "BMI", "Sex"],
+            columns="BiomarkerName",
+            values="Value",
+        ).reset_index()
 
-#         # Ensure we have all 9 biomarkers for each person
-#         reference_df = reference_df.dropna()
+        # Ensure we have all 9 biomarkers for each person
+        reference_df = reference_df.dropna()
 
-#         print(
-#             f"HD reference population: {len(reference_df)} people with complete biomarker data"
-#         )
-#         hd_model = HomeostasisDysregulation()
-#         hd_model.fit_reference_population(reference_df, biomarker_columns, "Age")
+        print(
+            f"HD reference population: {len(reference_df)} people with complete biomarker data"
+        )
+        hd_model = HomeostasisDysregulation()
+        hd_model.fit_reference_population(reference_df, biomarker_columns, "Age")
 
-#     except Exception as e:
-#         print(f"error: failed to initialize HD model on startup: {str(e)}")
-#         hd_model = None
-#     finally:
-#         connection.close()
+    except Exception as e:
+        print(f"error: failed to initialize HD model on startup: {str(e)}")
+        hd_model = None
+    finally:
+        connection.close()
 
 
 def get_db():
@@ -499,23 +500,28 @@ def reference_range_comparison(userId: int, type: str = "both", db=Depends(get_d
         return {"ranges": ranges}
 
 
-@app.get("/api/v1/users/{userId}/biomarkers/{biomarkerId}/trend")
-def biomarker_trends(
-    userId: int,
-    biomarkerId: int,
-    limit: int = 20,
-    range: str = "6months",
-    db=Depends(get_db),
-):
-    """Query 6: Show how biological age has changed over multiple calculations"""
-    range = range.strip()
-    number, text = "", ""
-    for letter in range:
-        if letter.isdigit():
-            number += letter
-        else:
-            text += letter
-    number, text = int(number.strip()), text.strip("s ")
+# @app.get("/api/v1/users/{userId}/biomarkers/{biomarkerId}/trend")
+# def biomarker_trends(
+#     userId: int,
+#     biomarkerId: int,
+#     limit: int = 20,
+#     range: str = "6months",
+#     db=Depends(get_db),
+# ):
+#     """Query 6: Show how biological age has changed over multiple calculations"""
+#     range = range.strip()
+#     number, text = "", ""
+#     for letter in range:
+#         if letter.isdigit():
+#             number += letter
+#         else:
+#             text += letter
+#     number, text = number.strip(), text.strip("s ")
+
+#     with db.cursor() as cursor:
+#         query = """
+
+#         """
 
 
 @app.get("/api/v1/users/{userId}/bio-age/history")
