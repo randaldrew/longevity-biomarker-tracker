@@ -76,7 +76,9 @@ def get_user_profile(userId: int, db):
         user = cursor.fetchone()
 
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
 
         # ---- latest biomarker values -----------------------------------------
         query = """
@@ -135,7 +137,7 @@ def list_all_users(db=Depends(get_db)):
         """
         cursor.execute(query)
         all_users = cursor.fetchall()
-        return {"users": all_users}
+    return {"users": all_users}
 
 
 @app.get("/api/v1/users/{userId}/profile")
@@ -164,14 +166,15 @@ def get_current_biological_age(userId: int, db=Depends(get_db)):
         biological_ages = cursor.fetchall()
         if not biological_ages:
             raise HTTPException(
-                status_code=404, detail=f"No biological age results for user {userId}"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No biological age results for user {userId}",
             )
         for biological_age in biological_ages:
             if isinstance(biological_age.get("computedAt"), date):
                 biological_age["computedAt"] = biological_age["computedAt"].strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
-        return {"bioAges": biological_ages}
+    return {"bioAges": biological_ages}
 
 
 @app.post("/api/v1/users/{userId}/bio-age/calculate")
@@ -379,7 +382,7 @@ def get_biological_age_history(
                 history["computedAt"] = history["computedAt"].strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
-        return {"history": age_history}
+    return {"history": age_history}
 
 
 @app.get("/apiv1/users/{userId}/sessions/{sessionId}")
@@ -395,16 +398,12 @@ def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
         FROM MeasurementSession
         WHERE UserID = %s AND SessionID = %s
         """
-        cursor.execute(
-            query,
-            (
-                userId,
-                sessionId,
-            ),
-        )
+        cursor.execute(query, (userId, sessionId))
         session_data = cursor.fetchone()
         if not session_data:
-            raise HTTPException(status_code=404, detail="User's session not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User's session not found"
+            )
         if isinstance(session_data.get("sessionDate"), date):
             session_data["sessionDate"] = session_data["sessionDate"].isoformat()
         if session_data.get("fastingStatus"):
@@ -424,8 +423,52 @@ def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
         cursor.execute(query, (userId,))
         measurement_data = cursor.fetchall()
         if not measurement_data:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session_data | {"measurements": measurement_data}
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+            )
+    return session_data | {"measurements": measurement_data}
+
+
+@app.get("/api/v1/biomarkers")
+def biomarker_catalog(db=Depends(get_db)):
+    """Query 9: Available biomarkers list"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            BiomarkerID AS biomarkerId,
+            Name AS name,
+            Units AS units,
+            Description AS description,
+            NHANESVarCode AS nhanesVarCode
+        FROM Biomarker
+        """
+        cursor.execute(query)
+        biomarkers = cursor.fetchall()
+        return {"biomarkers": biomarkers}
+
+
+@app.get("/api/v1/biomarkers/{biomarkerId}/ranges")
+def biomarker_reference_ranges(biomarkerId: int, db=Depends(get_db)):
+    """Query 10: Reference Ranges for Biomarker"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            RangeType AS rangeType,
+            Sex AS sex,
+            AgeMin AS ageMin,
+            AgeMax AS ageMax,
+            MinVal AS minVal,
+            MaxVal AS maxVal
+        FROM ReferenceRange
+        WHERE BiomarkerID = %s
+        """
+        cursor.execute(query, (biomarkerId,))
+        ranges = cursor.fetchall()
+        if not ranges:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Biomarker not found"
+            )
+        return {"ranges": ranges}
 
 
 # ---------------------------------------------------------------------
