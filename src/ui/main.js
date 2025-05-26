@@ -195,7 +195,6 @@ function listUsers() {
       const t = makeTable([
         "User ID",
         "SEQN",
-        "DOB",
         "Age",
         "Sex",
         "Race/Ethnicity",
@@ -206,7 +205,6 @@ function listUsers() {
         tr.innerHTML = `
           <td>${u.userId}</td>
           <td>${u.seqn}</td>
-          <td>${u.birthDate}</td>
           <td>${u.age}</td>
           <td>${u.sex}</td>
           <td>${u.raceEthnicity}</td>
@@ -228,7 +226,6 @@ function userProfile() {
       content.innerHTML = `
         <h2>User Profile - ${selectedUserId}</h2>
         <p>
-          <strong>DOB:</strong> ${d.user.birthDate} &nbsp;
           <strong>Age:</strong> ${d.user.age} &nbsp;
           <strong>Sex:</strong> ${d.user.sex} &nbsp;
           <strong>Race/Ethnicity:</strong> ${d.user.raceEthnicity}
@@ -268,6 +265,19 @@ function bioAge() {
         t.appendChild(tr);
       });
       content.appendChild(t);
+      content.appendChild(document.createElement("br"));
+      for (const modelName of ["Phenotypic Age", "Homeostatic Dysregulation"]) {
+        const btn = document.createElement("button");
+        btn.textContent = "Recalculate " + modelName
+        btn.onclick = () => {
+          api.calculateBioAge(selectedUserId, modelName).then((d) => {
+            bioAge();
+          });
+        };
+        content.appendChild(document.createElement("br"));
+        content.appendChild(btn);
+        content.appendChild(document.createElement("br"));
+      }
     })
     .catch(showError);
 }
@@ -353,13 +363,14 @@ function compareRangesForm() {
   `;
   const btn = document.createElement("button");
   btn.textContent = "Run";
+  const results = document.createElement("div");
   btn.onclick = () => {
     api
       .compareRanges(selectedUserId, document.querySelector("#rangeType").value)
       .then((d) => {
         console.log(d)
         const rangeType = document.querySelector("#rangeType").value
-        content.innerHTML = `<h2>Range Comparison - ${
+        results.innerHTML = `<h2>Range Comparison - ${
           rangeType
         }</h2>`;
         const t = makeTable([
@@ -389,12 +400,13 @@ function compareRangesForm() {
           }</td>`;
           t.appendChild(tr);
         });
-        content.appendChild(t);
+        results.appendChild(t);
       })
       .catch(showError);
   };
   form.appendChild(btn);
   content.appendChild(form);
+  content.appendChild(results);
 }
 
 /* Query 6: trend */
@@ -478,6 +490,7 @@ function sessionDetailsForm() {
   const form = document.createElement("div");
   form.className = "form-block";
   form.innerHTML = `<h4>Session Details - User ${selectedUserId}</h4>`;
+  const results = document.createElement("div");
   api
     .listUsers()
     .then((data) => {
@@ -486,7 +499,7 @@ function sessionDetailsForm() {
         .sessionCount;
       if (sessionCount === 0) {
         form.innerHTML += `<p>No sessions found.</p>`;
-        content.appendChild(form);
+        results.appendChild(form);
         return;
       }
       form.innerHTML += `<label class="small">Select Session</label>`;
@@ -506,7 +519,7 @@ function sessionDetailsForm() {
         api
           .getSessionDetails(selectedUserId, sid)
           .then((d) => {
-            content.innerHTML = `
+            results.innerHTML = `
               <h2>Session ${sid}</h2>
               <p><strong>Date:</strong> ${
                 d.sessionDate
@@ -524,12 +537,13 @@ function sessionDetailsForm() {
               `;
               t.appendChild(tr);
             });
-            content.appendChild(t);
+            results.appendChild(t);
           })
           .catch(showError);
       };
       form.appendChild(btn);
       content.appendChild(form);
+      content.appendChild(results);
     });
 }
 
@@ -561,6 +575,7 @@ function biomarkerRangesForm() {
   const form = document.createElement("div");
   form.className = "form-block";
   form.innerHTML = "<h4>Reference Ranges</h4>";
+  const results = document.createElement("div");
   api.biomarkerCatalog().then((cat) => {
     const sel = document.createElement("select");
     sel.id = "bioRangeSel";
@@ -578,7 +593,7 @@ function biomarkerRangesForm() {
         .biomarkerRanges(parseInt(sel.value))
         .then((d) => {
           const bio = cat.biomarkers.find((x) => x.biomarkerId == sel.value);
-          content.innerHTML = `<h2>Reference Ranges - ${bio.name}</h2>`;
+          results.innerHTML = `<h2>Reference Ranges - ${bio.name}</h2>`;
           const t = makeTable([
             "Type",
             "Sex",
@@ -599,12 +614,13 @@ function biomarkerRangesForm() {
             `;
             t.appendChild(tr);
           });
-          content.appendChild(t);
+          results.appendChild(t);
         })
         .catch(showError);
     };
     form.appendChild(btn);
     content.appendChild(form);
+    content.appendChild(results);
   });
 }
 
