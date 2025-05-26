@@ -115,7 +115,7 @@ run:  # start FastAPI with hot-reload
 		--port $${APP_API_PORT:-8000}
 
 ui:
-	$(VENV_ACTIVATE) cd src/ui && streamlit run app.py
+	$(VENV_ACTIVATE) cd src/ui && python -m http.server 80
 
 # Cleanup
 clean:

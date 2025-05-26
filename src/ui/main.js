@@ -24,121 +24,135 @@ function showError(e) {
   content.innerHTML = `<div class="alert">${e.error || e}</div>`;
 }
 
-/* mock API */
+/* API */
+const API_BASE = "http://localhost:8000/api/v1";
+
 const api = {
-  listUsers: () =>
-    Promise.resolve({
-      users: mockDB.users.map((u) => ({
-        ...u,
-        age: getAge(u.birthDate),
-        sessionCount: 1,
-      })),
-    }),
-
-  getUserProfile: (userId) => {
-    const user = mockDB.users.find((u) => u.userId === userId);
-    if (!user) return Promise.reject({ error: "User not found" });
-    return Promise.resolve({
-      user: { ...user, age: getAge(user.birthDate) },
-      biomarkers: mockDB.profiles[userId]?.biomarkers || [],
-    });
+  // 1. List all users
+  listUsers: async () => {
+    const res = await fetch(`${API_BASE}/users`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { users: [...] }
   },
 
-  getBioAge: (userId) => {
-    const r = mockDB.bioAges[userId];
-    return r
-      ? Promise.resolve({ bioAges: r })
-      : Promise.reject({ error: "No biological age results for user" });
-  },
-
-  recalcBioAge: (userId, modelName) => {
-    const r = mockDB.bioAges[userId];
-    if (!r)
-      return Promise.reject({
-        error: "Insufficient biomarker data for calculation",
-      });
-    return Promise.resolve(r[r.length - 1]);
-  },
-
-  compareRanges: (userId, type = "both") => {
-    const profile = mockDB.profiles[userId];
-    if (!profile) return Promise.reject({ error: "No data" });
-    const result = profile.biomarkers.map((b) => {
-      const rr = mockDB.ranges[b.biomarkerId] || [];
-      const clinical = rr.find((x) => x.rangeType === "clinical");
-      const longevity = rr.find((x) => x.rangeType === "longevity");
-      const which =
-        type === "clinical"
-          ? clinical
-          : type === "longevity"
-          ? longevity
-          : longevity || clinical;
-      let status = "Unknown";
-      if (which) {
-        if (b.value < which.minVal || b.value > which.maxVal)
-          status = "OutOfRange";
-        else {
-          const mid = (which.minVal + which.maxVal) / 2;
-          status =
-            Math.abs(b.value - mid) <= (which.maxVal - which.minVal) * 0.25
-              ? "Optimal"
-              : "Normal";
-        }
-      }
-      return {
-        ...b,
-        status,
-        clinicalRange: clinical,
-        longevityRange: longevity,
-      };
-    });
-    return Promise.resolve({ ranges: result });
-  },
-
-  trend: (userId, biomarkerId, limit) => {
-    const profile = mockDB.profiles[userId];
-    if (!profile) return Promise.reject({ error: "No data" });
-    const now = new Date();
-    const out = [];
-    for (let i = 0; i < limit; i++) {
-      const d = new Date(now);
-      d.setMonth(now.getMonth() - i * 2);
-      const base =
-        profile.biomarkers.find((x) => x.biomarkerId === biomarkerId)?.value ||
-        0;
-      out.push({
-        date: d.toISOString().split("T")[0],
-        value: +(base + (Math.random() - 0.5) * 5).toFixed(1),
-        sessionId: 900 + i,
-      });
+  // 2. Get one user’s profile + latest biomarkers
+  getUserProfile: async (userId) => {
+    const res = await fetch(`${API_BASE}/users/${userId}/profile`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
     }
-    return Promise.resolve({ trend: out.reverse() });
+    return res.json();
+    // -> { user: {...}, biomarkers: [...] }
   },
 
-  bioAgeHistory: (userId) =>
-    Promise.resolve({ history: mockDB.bioAges[userId] || [] }),
-
-  getSessionDetails: (userId, sessionId) => {
-    const s = mockDB.sessions[sessionId];
-    return s && s.userId === userId
-      ? Promise.resolve(s)
-      : Promise.reject({ error: "Session not found" });
+  // 3. Get current bio-age results
+  getBioAge: async (userId) => {
+    const res = await fetch(`${API_BASE}/users/${userId}/bio-age`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { bioAges: [...] }
   },
 
-  biomarkerCatalog: () => Promise.resolve({ biomarkers: mockDB.biomarkers }),
-
-  biomarkerRanges: (id) => {
-    const r = mockDB.ranges[id];
-    return r
-      ? Promise.resolve({ ranges: r })
-      : Promise.reject({ error: "Biomarker not found" });
+  // 3.5 Calculate + persist bio-age
+  calculateBioAge: async (userId, modelName = "") => {
+    const res = await fetch(`${API_BASE}/users/${userId}/bio-age/calculate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelName }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { calculations: [...] }
   },
 
-  addMeasurement: (userId, data) =>
-    Promise.resolve({
-      sessionId: 500,
-      measurementIds: data.measurements.map((_, i) => 1000 + i),
-    }),
+  // 4. Add a new measurement session + its measurements
+  addMeasurements: async (
+    userId,
+    { sessionDate, fastingStatus, measurements }
+  ) => {
+    const res = await fetch(`${API_BASE}/users/${userId}/measurements`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionDate, fastingStatus, measurements }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { sessionId, measurementIds: [...] }
+  },
+
+  // 5. Reference-range comparison
+  compareRanges: async (userId, type = "both") => {
+    const res = await fetch(`${API_BASE}/users/${userId}/ranges?type=${type}`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { ranges: [...] }
+  },
+
+  // 6. Biomarker trend
+  trend: async (userId, biomarkerId, limit = 20, range = "100years") => {
+    const params = new URLSearchParams({ limit, range });
+    const res = await fetch(
+      `${API_BASE}/users/${userId}/biomarkers/${biomarkerId}/trend?${params}`
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { trend: [...] }
+  },
+
+  // 7. Biological-age history
+  bioAgeHistory: async (userId, model = "") => {
+    const q = model ? `?model=${encodeURIComponent(model)}` : "";
+    const res = await fetch(`${API_BASE}/users/${userId}/bio-age/history${q}`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { history: [...] }
+  },
+
+  // 8. Session details + measurements
+  getSessionDetails: async (userId, sessionId) => {
+    const res = await fetch(
+      `${API_BASE}/users/${userId}/sessions/${sessionId}`
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { sessionId, sessionDate, fastingStatus, measurements: [...] }
+  },
+
+  // 9. Biomarker catalog
+  biomarkerCatalog: async () => {
+    const res = await fetch(`${API_BASE}/biomarkers`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { biomarkers: [...] }
+  },
+
+  // 10. Ranges for one biomarker
+  biomarkerRanges: async (biomarkerId) => {
+    const res = await fetch(`${API_BASE}/biomarkers/${biomarkerId}/ranges`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { ranges: [...] }
+  },
 };
 
 /* UI globals */
@@ -150,6 +164,7 @@ let selectedUserId = null;
 api.listUsers().then((d) => {
   const sel = document.querySelector("#userSelect");
   sel.innerHTML = '<option value="">— select user —</option>';
+  console.log(d)
   d.users.forEach((u) => {
     const opt = document.createElement("option");
     opt.value = u.userId;
@@ -258,7 +273,7 @@ function bioAge() {
 }
 
 /* Query 4: add measurement */
-function addMeasurementForm() {
+function addMeasurementsForm() {
   if (!ensureUser()) return;
   content.innerHTML = "";
   const form = document.createElement("div");
@@ -305,7 +320,7 @@ function addMeasurementForm() {
         return;
       }
       api
-        .addMeasurement(selectedUserId, {
+        .addMeasurements(selectedUserId, {
           sessionDate: document.querySelector("#sessDate").value,
           fastingStatus: document.querySelector("#fastingChk").checked,
           measurements,
@@ -342,8 +357,10 @@ function compareRangesForm() {
     api
       .compareRanges(selectedUserId, document.querySelector("#rangeType").value)
       .then((d) => {
+        console.log(d)
+        const rangeType = document.querySelector("#rangeType").value
         content.innerHTML = `<h2>Range Comparison - ${
-          document.querySelector("#rangeType").value
+          rangeType
         }</h2>`;
         const t = makeTable([
           "Biomarker",
@@ -353,18 +370,21 @@ function compareRangesForm() {
           "Longevity",
         ]);
         d.ranges.forEach((r) => {
+          console.log(r.clinicalRange, JSON.parse(r.clinicalRange))
+          const clinicalRange = rangeType != "longevity" && JSON.parse(r.clinicalRange)
+          const longevityRange = rangeType != "clinical" && JSON.parse(r.longevityRange)
           const tr = document.createElement("tr");
           tr.innerHTML = `<td>${r.name}</td><td>${
             r.value
           }</td><td class="status-${r.status.toLowerCase()}">${
-            r.status
+            r.status == "OutOfRange" ? "Out of Range" : r.status
           }</td><td>${
-            r.clinicalRange
-              ? `${r.clinicalRange.minVal}-${r.clinicalRange.maxVal}`
+            clinicalRange
+              ? `${clinicalRange.min}-${clinicalRange.max}`
               : "—"
           }</td><td>${
-            r.longevityRange
-              ? `${r.longevityRange.minVal}-${r.longevityRange.maxVal}`
+            longevityRange
+              ? `${longevityRange.min}-${longevityRange.max}`
               : "—"
           }</td>`;
           t.appendChild(tr);
@@ -415,7 +435,7 @@ function trendForm() {
           content.appendChild(canvas);
           drawTrend(canvas, d.trend);
           const t = makeTable(["Date", "Value"]);
-          d.trend.forEach((r) => {
+          d.trend.reverse().forEach((r) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `<td>${r.date}</td><td>${r.value}</td>`;
             t.appendChild(tr);
@@ -458,56 +478,59 @@ function sessionDetailsForm() {
   const form = document.createElement("div");
   form.className = "form-block";
   form.innerHTML = `<h4>Session Details - User ${selectedUserId}</h4>`;
-  /* build dropdown of sessions */
-  const sessionList = Object.entries(mockDB.sessions).filter(
-    ([sid, s]) => s.userId === selectedUserId
-  );
-  if (sessionList.length === 0) {
-    form.innerHTML += `<p>No sessions found.</p>`;
-    content.appendChild(form);
-    return;
-  }
-  form.innerHTML += `<label class="small">Select Session</label>`;
-  const sel = document.createElement("select");
-  sel.id = "sessSelect";
-  sessionList.forEach(([sid, s]) => {
-    const op = document.createElement("option");
-    op.value = sid;
-    op.textContent = `${sid} - ${s.sessionDate}`;
-    sel.appendChild(op);
-  });
-  form.appendChild(sel);
-  const btn = document.createElement("button");
-  btn.textContent = "Run";
-  btn.onclick = () => {
-    const sid = parseInt(document.querySelector("#sessSelect").value);
-    api
-      .getSessionDetails(selectedUserId, sid)
-      .then((d) => {
-        content.innerHTML = `
-          <h2>Session ${sid}</h2>
-          <p><strong>Date:</strong> ${
-            d.sessionDate
-          } &nbsp; <strong>Fasting:</strong> ${
-            d.fastingStatus ? "Yes" : "No"
-          }</p>
-        `;
-        const t = makeTable(["Biomarker", "Value", "Units"]);
-        d.measurements.forEach((m) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${m.name}</td>
-            <td>${m.value}</td>
-            <td>${m.units}</td>
-          `;
-          t.appendChild(tr);
-        });
-        content.appendChild(t);
-      })
-      .catch(showError);
-  };
-  form.appendChild(btn);
-  content.appendChild(form);
+  api
+    .listUsers()
+    .then((data) => {
+      const sessionCount = data.users
+        .find((u) => u.userId == selectedUserId)
+        .sessionCount;
+      if (sessionCount === 0) {
+        form.innerHTML += `<p>No sessions found.</p>`;
+        content.appendChild(form);
+        return;
+      }
+      form.innerHTML += `<label class="small">Select Session</label>`;
+      const sel = document.createElement("select");
+      sel.id = "sessSelect";
+      for (let sid = 1; sid <= sessionCount; sid++) {
+        const op = document.createElement("option");
+        op.value = sid;
+        op.textContent = `Session ${sid}`;
+        sel.appendChild(op);
+      }
+      form.appendChild(sel);
+      const btn = document.createElement("button");
+      btn.textContent = "Run";
+      btn.onclick = () => {
+        const sid = parseInt(document.querySelector("#sessSelect").value);
+        api
+          .getSessionDetails(selectedUserId, sid)
+          .then((d) => {
+            content.innerHTML = `
+              <h2>Session ${sid}</h2>
+              <p><strong>Date:</strong> ${
+                d.sessionDate
+              } &nbsp; <strong>Fasting:</strong> ${
+              d.fastingStatus ? "Yes" : "No"
+            }</p>
+            `;
+            const t = makeTable(["Biomarker", "Value", "Units"]);
+            d.measurements.forEach((m) => {
+              const tr = document.createElement("tr");
+              tr.innerHTML = `
+                <td>${m.name}</td>
+                <td>${m.value}</td>
+                <td>${m.units}</td>
+              `;
+              t.appendChild(tr);
+            });
+            content.appendChild(t);
+          })
+          .catch(showError);
+      };
+      form.appendChild(btn);
+      content.appendChild(form);
+    });
 }
 
 /* Query 9: biomarker catalog */
@@ -567,7 +590,7 @@ function biomarkerRangesForm() {
           d.ranges.forEach((r) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td>${r.rangeType}</td
+              <td>${r.rangeType}</td>
               <td>${r.sex}</td>
               <td>${r.ageMin}</td>
               <td>${r.ageMax}</td>
@@ -631,8 +654,8 @@ runButton.addEventListener("click", () => {
     case "bioAge":
       bioAge();
       break;
-    case "addMeasurement":
-      addMeasurementForm();
+    case "addMeasurements":
+      addMeasurementsForm();
       break;
     case "compareRanges":
       compareRangesForm();
