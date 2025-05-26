@@ -1,4 +1,4 @@
-.PHONY: db etl test run ui clean help db-reset venv install install-dev install-prod lint
+.PHONY: db etl test run ui clean help db-reset venv install install-dev install-prod lint reference-ranges
 
 # Use one shell for multi-line recipes
 .ONESHELL:
@@ -30,7 +30,8 @@ help:
 	@echo ""
 	@echo "Development commands:"
 	@echo "  make db          - Start MySQL database"
-	@echo "  make etl         - Run ETL process (download, transform, load)"
+	@echo "  make etl         - Run ETL process (download, transform, load + reference ranges)"
+	@echo "  make reference-ranges - Generate reference range data only"
 	@echo "  make test        - Run tests"
 	@echo "  make run         - Start API server"
 	@echo "  make ui          - Start UI dashboard"
@@ -81,6 +82,12 @@ verify-demo-data:
 	docker compose exec -T db mysql -u$(MYSQL_USER) -p"$(MYSQL_PASSWORD)" $(MYSQL_DATABASE) -e \
 		"SELECT u.UserID, u.SEQN, COUNT(DISTINCT s.SessionID) as Sessions, COUNT(DISTINCT m.BiomarkerID) as Biomarkers FROM User u LEFT JOIN MeasurementSession s ON u.UserID = s.UserID LEFT JOIN Measurement m ON s.SessionID = m.SessionID WHERE u.SEQN BETWEEN 9900001 AND 9900006 GROUP BY u.UserID, u.SEQN ORDER BY u.UserID;"
 
+# Generate reference ranges (standalone)
+reference-ranges:
+	@mkdir -p data/clean
+	$(VENV_ACTIVATE) python etl/generate_reference_ranges.py
+	@echo "✅ Reference ranges generated successfully"
+
 # ETL pipeline
 etl:
 	$(VENV_ACTIVATE) python etl/download_nhanes.py
@@ -89,6 +96,7 @@ etl:
 	else \
 		echo "[WARN] transform.ipynb not found or empty — skipping transform step"; \
 	fi
+	$(VENV_ACTIVATE) python etl/generate_reference_ranges.py
 	bash etl/load.sh
 
 # Testing

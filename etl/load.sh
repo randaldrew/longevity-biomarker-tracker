@@ -1,127 +1,175 @@
 #!/usr/bin/env bash
-# ETL Load Script – Longevity Biomarker Tracker
-# ---------------------------------------------
-#  * requires MySQL 8 container started via `make db`
-#  * run from repo root with:  bash etl/load.sh  (or `make etl`)
+# ------------------------------------------------------------------
+# ETL Load Script – loads patched CSVs into MySQL 8
+# • Handles SEQN→UserID and SessionID look-ups with temp tables
+# • Creates a tidy sample dump for CI without privileged options
+# ------------------------------------------------------------------
 
-# 0 · Environment ---------------------------------------------------------------
-cd "$(dirname "$0")"/..            # always repo root
-set -a && source .env && set +a    # pulls MYSQL_* vars
+set -euo pipefail
+
+# ── Move to repo root ──────────────────────────────────────────────
+cd "$(dirname "$0")/.."  # script is in etl/
+
+# ── Env vars ──────────────────────────────────────────────────────
+set -a
+source .env
+set +a
+
+MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
+MYSQL_PORT=${MYSQL_PORT:-3307}
+
+mysql_cmd() {
+  mysql --local-infile=1 -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+        -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" "$@"
+}
+
+mysqldump_cmd() {
+  mysqldump --no-tablespaces -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+            -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" "$@"
+}
 
 echo "Starting data load process..."
 
-# 1 · Skip gracefully if transform hasn’t produced CSVs yet ---------------------
+# ── Ensure CSVs present ────────────────────────────────────────────
 if ! ls data/clean/*.csv >/dev/null 2>&1; then
-  echo "[WARN] No clean CSVs found – run transform first."
+  echo "[WARN] Skipping MySQL LOAD – clean/*.csv not generated yet."
   exit 0
 fi
 
-# 2 · Idempotence – clear tables (child → parent) ------------------------------
-echo "Clearing existing rows..."
-mysql -h127.0.0.1 -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "
-  SET FOREIGN_KEY_CHECKS = 0;
-    TRUNCATE TABLE Measurement;
-    TRUNCATE TABLE MeasurementSession;
-    TRUNCATE TABLE Anthropometry;
-    TRUNCATE TABLE User;
-  SET FOREIGN_KEY_CHECKS = 1;
-"
+# ── Load reference ranges  ─────────────────────────
 
-# helper so we don’t repeat flags
-MYSQL_CMD="mysql --local-infile=1 -h127.0.0.1 -P$MYSQL_PORT -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE"
+# Clear existing reference ranges before loading new ones
+mysql --local-infile=1 -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+      -e "DELETE FROM ReferenceRange;"
 
-# 3 · Users --------------------------------------------------------------------
-echo "Loading Users..."
-$MYSQL_CMD -e "
+# Load reference ranges
+echo "Loading reference ranges..."
+mysql --local-infile=1 -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" << 'EOF'
+
+LOAD DATA LOCAL INFILE 'data/clean/reference_ranges.csv'
+INTO TABLE ReferenceRange
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n'
+IGNORE 3 LINES
+(BiomarkerID, RangeType, Sex, AgeMin, AgeMax, MinVal, MaxVal);
+
+EOF
+
+# Verify the load
+echo "Verifying reference ranges loaded..."
+mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+      "$MYSQL_DATABASE" -e "SELECT RangeType, COUNT(*) as count FROM ReferenceRange GROUP BY RangeType;"
+
+# ── Load USERS (BirthDate already patched) ─────────────────────────
+echo "Loading User ..."
+mysql_cmd -e "
   LOAD DATA LOCAL INFILE 'data/clean/users.csv'
   INTO TABLE User
-    FIELDS TERMINATED BY ','  ENCLOSED BY '\"'
-    LINES  TERMINATED BY '\n'
-    IGNORE 1 ROWS
-    (SEQN, BirthDate, Sex, RaceEthnicity);
+  FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
+  LINES  TERMINATED BY '\n'
+  IGNORE 1 ROWS
+  (SEQN, BirthDate, Sex, RaceEthnicity);
 "
 
-# 4 · Sessions -----------------------------------------------------------------
-echo "Loading MeasurementSessions..."
-$MYSQL_CMD -e "
-  LOAD DATA LOCAL INFILE 'data/clean/sessions.csv'
-  INTO TABLE MeasurementSession
-    FIELDS TERMINATED BY ','  ENCLOSED BY '\"'
-    LINES  TERMINATED BY '\n'
-    IGNORE 1 ROWS
-    (UserID, SessionDate, FastingStatus);
-"
-
-# 5 · Anthropometry (staging → final) ------------------------------------------
-echo "Loading Anthropometry..."
-$MYSQL_CMD -e "
-  DROP TEMPORARY TABLE IF EXISTS anthro_staging;
-  CREATE TEMPORARY TABLE anthro_staging (
-      SEQN       INT,
-      ExamDate   DATE,
-      HeightCM   DECIMAL(5,2),
-      WeightKG   DECIMAL(5,2),
-      BMI        DECIMAL(4,2)
+# ── Load MEASUREMENTSESSION (SEQN → UserID) ───────────────────────
+echo "Loading MeasurementSession ..."
+mysql_cmd -e "
+  CREATE TEMPORARY TABLE tmp_sessions (
+      SEQN INT, SessionDate DATE, FastingStatus TINYINT
   );
 
-  LOAD DATA LOCAL INFILE 'data/clean/anthropometry.csv'
-  INTO TABLE anthro_staging
-    FIELDS TERMINATED BY ','  ENCLOSED BY '\"'
+  LOAD DATA LOCAL INFILE 'data/clean/sessions.csv'
+  INTO TABLE tmp_sessions
+  FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
+  LINES  TERMINATED BY '\n'
+  IGNORE 1 ROWS
+  (SEQN, SessionDate, FastingStatus);
+
+  INSERT IGNORE INTO MeasurementSession (UserID, SessionDate, FastingStatus)
+  SELECT u.UserID, t.SessionDate, t.FastingStatus
+  FROM   tmp_sessions t
+  JOIN   User u USING (SEQN);
+
+  DROP TEMPORARY TABLE tmp_sessions;
+"
+
+# ── Load MEASUREMENT (SEQN + SessionDate → SessionID) ─────────────
+echo "Loading Measurement ..."
+mysql_cmd -e "
+  CREATE TEMPORARY TABLE tmp_meas (
+      SEQN INT, SessionDate DATE,
+      BiomarkerID INT, Value DECIMAL(12,4), TakenAt TIMESTAMP
+  );
+
+  LOAD DATA LOCAL INFILE 'data/clean/measurements.csv'
+  INTO TABLE tmp_meas
+  FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
+  LINES  TERMINATED BY '\n'
+  IGNORE 1 ROWS
+  (SEQN, SessionDate, BiomarkerID, Value, TakenAt);
+
+  INSERT IGNORE INTO Measurement (SessionID, BiomarkerID, Value, TakenAt)
+  SELECT s.SessionID, t.BiomarkerID, t.Value, t.TakenAt
+  FROM   tmp_meas t
+  JOIN   User u USING (SEQN)
+  JOIN   MeasurementSession s
+         ON s.UserID = u.UserID AND s.SessionDate = t.SessionDate;
+
+  DROP TEMPORARY TABLE tmp_meas;
+"
+
+# ── Load ANTHROPOMETRY (optional file) ────────────────────────────
+if [[ -f "data/clean/anthropometry.csv" ]]; then
+  echo "Loading Anthropometry ..."
+  mysql_cmd -e "
+    CREATE TEMPORARY TABLE tmp_anthro (
+        SEQN INT, ExamDate DATE,
+        HeightCM DECIMAL(5,2), WeightKG DECIMAL(5,2), BMI DECIMAL(4,2)
+    );
+
+    LOAD DATA LOCAL INFILE 'data/clean/anthropometry.csv'
+    INTO TABLE tmp_anthro
+    FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
     LINES  TERMINATED BY '\n'
     IGNORE 1 ROWS
     (SEQN, ExamDate, HeightCM, WeightKG, BMI);
 
-  INSERT INTO Anthropometry (UserID, ExamDate, HeightCM, WeightKG, BMI)
-  SELECT  u.UserID, a.ExamDate, a.HeightCM, a.WeightKG, a.BMI
-  FROM anthro_staging a
-  JOIN User u USING (SEQN);
+    INSERT IGNORE INTO Anthropometry (UserID, ExamDate, HeightCM, WeightKG, BMI)
+    SELECT u.UserID, t.ExamDate, t.HeightCM, t.WeightKG, t.BMI
+    FROM   tmp_anthro t
+    JOIN   User u USING (SEQN);
 
-  DROP TEMPORARY TABLE anthro_staging;
-"
+    DROP TEMPORARY TABLE tmp_anthro;
+  "
+else
+  echo "Skipping Anthropometry (file not found)"
+fi
 
-# 6 · Measurements (two-phase) -------------------------------------------------
-echo "Loading Measurements (staging → join)..."
-$MYSQL_CMD -e "
-  DROP TEMPORARY TABLE IF EXISTS measurements_staging;
-  CREATE TEMPORARY TABLE measurements_staging (
-      SEQN         INT,
-      BiomarkerID  INT,
-      Value        DECIMAL(12,4),
-      SessionDate  DATE,
-      TakenAt      TIMESTAMP
-  );
+# ── Create sample dump for CI (no LIMIT-in-subquery) ───────────────
+echo "Creating sample dump for testing ..."
 
-  LOAD DATA LOCAL INFILE 'data/clean/measurements.csv'
-  INTO TABLE measurements_staging
-    FIELDS TERMINATED BY ','  ENCLOSED BY '\"'
-    LINES  TERMINATED BY '\n'
-    IGNORE 1 ROWS
-    (SEQN, BiomarkerID, Value, SessionDate, TakenAt);
+TOP_USERS=$(mysql_cmd -N -e \
+  "SELECT GROUP_CONCAT(UserID) FROM (SELECT UserID FROM User ORDER BY CreatedAt DESC LIMIT 10) t")
 
-  INSERT INTO Measurement (SessionID, BiomarkerID, Value, TakenAt)
-  SELECT  s.SessionID,
-          m.BiomarkerID,
-          m.Value,
-          m.TakenAt
-  FROM measurements_staging m
-  JOIN MeasurementSession s
-        ON s.UserID = m.SEQN
-       AND s.SessionDate = m.SessionDate;
-
-  DROP TEMPORARY TABLE measurements_staging;
-"
-
-# 7 · Sample dump for CI --------------------------------------------------------
-echo "Creating sample dump for CI..."
-> tests/sample_dump.sql   # truncate file
-
-docker compose exec -T db mysqldump \
-  --no-tablespaces --column-statistics=0 \
-  -uroot -p"$MYSQL_ROOT_PASSWORD" \
+# 1) Users
+mysqldump_cmd User \
+  --where="UserID IN ($TOP_USERS)" \
   --skip-add-drop-table --skip-lock-tables \
-  "$MYSQL_DATABASE"  \
-  User MeasurementSession Measurement Anthropometry \
+  > tests/sample_dump.sql
+
+# 2) Sessions
+mysqldump_cmd MeasurementSession \
+  --where="UserID IN ($TOP_USERS)" \
+  --no-create-info --skip-add-drop-table --skip-lock-tables \
+  >> tests/sample_dump.sql
+
+# 3) Measurements
+mysqldump_cmd Measurement \
+  --where="SessionID IN (SELECT SessionID FROM MeasurementSession WHERE UserID IN ($TOP_USERS))" \
+  --no-create-info --skip-add-drop-table --skip-lock-tables \
   >> tests/sample_dump.sql
 
 echo "Sample dump written to tests/sample_dump.sql"
-echo "✅ Data loading completed successfully!"
+echo "Data loading completed successfully!"
