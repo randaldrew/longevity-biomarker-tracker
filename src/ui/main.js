@@ -100,7 +100,7 @@ const api = {
   },
 
   // 6. Biomarker trend
-  trend: async (userId, biomarkerId, limit = 20, range = "100years") => {
+  trend: async (userId, biomarkerId, limit = 20, range = "") => {
     const params = new URLSearchParams({ limit, range });
     const res = await fetch(
       `${API_BASE}/users/${userId}/biomarkers/${biomarkerId}/trend?${params}`
@@ -418,7 +418,7 @@ function compareRangesForm() {
   content.appendChild(results);
 }
 
-/* Query 6: trend */
+/* Query 6: biomarker trend */
 function trendForm() {
   if (!ensureUser()) return;
   content.innerHTML = "";
@@ -435,6 +435,7 @@ function trendForm() {
       sel.appendChild(op);
     });
     form.appendChild(sel);
+
     const label = document.createElement("label");
     label.className = "small";
     label.textContent = "Number of points";
@@ -446,15 +447,46 @@ function trendForm() {
     input.max = "50";
     form.appendChild(label);
     form.appendChild(input);
+
+    const rangeLabel = document.createElement("label");
+    rangeLabel.className = "small";
+    rangeLabel.textContent = "Range ";
+    const rangeInput = document.createElement("input");
+    rangeInput.type = "number";
+    rangeInput.id = "trendRangeNum";
+    rangeInput.value = "6";
+    rangeInput.min = "1";
+    rangeInput.style.width = "60px";
+    const rangeUnit = document.createElement("select");
+    rangeUnit.id = "trendRangeUnit";
+    ["days", "months", "years"].forEach((unit) => {
+      const opt = document.createElement("option");
+      opt.value = unit;
+      opt.textContent = unit;
+      rangeUnit.appendChild(opt);
+    });
+    rangeUnit.style.width = "100px";
+    rangeUnit.value = "months";
+    form.appendChild(rangeLabel);
+    form.appendChild(document.createElement("br"));
+    form.appendChild(rangeInput);
+    form.appendChild(document.createTextNode(" "));
+    form.appendChild(rangeUnit);
+    form.appendChild(document.createElement("br"));
+
     const btn = document.createElement("button");
     btn.textContent = "Run";
     const results = document.createElement("div");
     btn.onclick = () => {
+      const rangeStr =
+        document.querySelector("#trendRangeNum").value +
+        document.querySelector("#trendRangeUnit").value;
       api
         .trend(
           selectedUserId,
           parseInt(sel.value),
-          parseInt(document.querySelector("#trendLimit").value)
+          parseInt(document.querySelector("#trendLimit").value),
+          rangeStr
         )
         .then((d) => {
           results.innerHTML = `<h2>Trend - Biomarker ${sel.value}</h2>`;
