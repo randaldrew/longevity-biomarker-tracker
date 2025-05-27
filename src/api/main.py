@@ -679,22 +679,26 @@ def biomarker_reference_ranges(biomarkerId: int, db=Depends(get_db)):
         return {"ranges": ranges}
 
 
-@app.get("/api/v1/users/session-summary")
-def get_users_with_sessions(db=Depends(get_db)):
-    """Query 11: List all users with their session count"""
+@app.get("/api/v1/users/age-distribution")
+def get_age_distribution(db=Depends(get_db)):
+    """Query 11: Show user count by age groups"""
     with db.cursor() as cursor:
         query = """
         SELECT
-            User.UserID,
-            User.SEQN,
-            User.Sex,
-            Count(MeasurementSession.SessionID) AS SessionCount
+            CASE
+                WHEN TIMESTAMPDIFF(YEAR, BirthDate, CURDATE()) < 30 THEN "20-29"
+                WHEN TIMESTAMPDIFF(YEAR, BirthDate, CURDATE()) < 40 THEN "30-39"
+                WHEN TIMESTAMPDIFF(YEAR, BirthDate, CURDATE()) < 50 THEN "40-49"
+                ELSE "60+"
+                END AS AgeGroup,
+            Sex,
+            COUNT(*) AS UserCount
         FROM User
-        LEFT JOIN MeasurementSession ON User.UserID=MeasurementSession.UserID
-        GROUP BY User.UserID, User.SEQN, User.Sex
+        GROUP BY AgeGroup, Sex
+        ORDER BY AgeGroup, Sex
         """
         cursor.execute(query)
-        return {"users": cursor.fetchall()}
+        return {"ageDistribution": cursor.fetchall()}
 
 
 @app.get("/api/v1/biomarkers/measurement-summary")
