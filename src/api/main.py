@@ -679,6 +679,41 @@ def biomarker_reference_ranges(biomarkerId: int, db=Depends(get_db)):
         return {"ranges": ranges}
 
 
+@app.get("/api/v1/users/session-summary")
+def get_users_with_sessions(db=Depends(get_db)):
+    """Query 11: List all users with their session count"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            User.UserID,
+            User.SEQN,
+            User.Sex,
+            Count(MeasurementSession.SessionID) AS SessionCount
+        FROM User
+        LEFT JOIN MeasurementSession ON User.UserID=MeasurementSession.UserID
+        GROUP BY User.UserID, User.SEQN, User.Sex
+        """
+        cursor.execute(query)
+        return {"users": cursor.fetchall()}
+
+
+@app.get("/api/v1/biomarkers/measurement-summary")
+def get_biomarkers_with_counts(db=Depends(get_db)):
+    """Query 12: List biomarkers with their measurement count"""
+    with db.cursor() as cursor:
+        query = """
+        SELECT
+            Biomarker.Name,
+            Biomarker.Units,
+            COUNT(Measurement.MeasurementID) AS MeasurementCount
+        FROM Biomarker
+        LEFT JOIN Measurement ON Biomarker.BiomarkerID=Measurement.BiomarkerID
+        GROUP BY Biomarker.Name, Biomarker.Units
+        """
+        cursor.execute(query)
+        return {"biomarkers": cursor.fetchall()}
+
+
 # ---------------------------------------------------------------------
 # Test stub endpoints for pytest
 # ---------------------------------------------------------------------
