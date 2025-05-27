@@ -15,7 +15,7 @@ header {
   padding: 38px;
 }
 header h1 {
-  margin: 0 0 6px 0;
+  margin: 0 0 6px;
   font-size: 42px;
   letter-spacing: 0.5px;
 }
@@ -70,7 +70,7 @@ input[type="date"],
 select {
   width: 100%;
   padding: 8px 10px;
-  margin: 6px 0 16px 0;
+  margin: 6px 0 16px;
   border: 1px solid #bbb;
   border-radius: 4px;
 }
@@ -101,39 +101,36 @@ td {
 tr:nth-child(even) {
   background: #fafafa;
 }
+.status-optimal,
+.status-normal,
+.status-outofrange {
+  font-weight: bold;
+}
 .status-optimal {
   color: #27ae60;
-  font-weight: bold;
 }
 .status-normal {
   color: #f39c12;
-  font-weight: bold;
 }
 .status-outofrange {
   color: #e74c3c;
-  font-weight: bold;
 }
+
 .alert,
 .success {
   padding: 10px;
   margin-bottom: 15px;
   border-radius: 4px;
   font-weight: bold;
+  color: #fff;
 }
 .alert {
   background: #e74c3c;
-  color: #fff;
 }
 .success {
   background: #2ecc71;
-  color: #fff;
 }
-canvas {
-  max-width: 100%;
-  height: 300px;
-  border: 1px solid #ccc;
-  margin-top: 12px;
-}
+
 .form-block {
   background: #fdfdfd;
   border: 1px solid #ddd;
@@ -143,4 +140,323 @@ canvas {
 }
 .form-block h4 {
   margin-top: 0;
+}
+
+/* visualization styles */
+
+/* user biological age visuals */
+.bioage-vis-area {
+  font-family: Arial, sans-serif;
+  padding: 5px 0;
+  min-width: 180px;
+  box-sizing: border-box;
+}
+.bioage-vis-info {
+  font-size: 0.9em;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.bioage-vis-value {
+  display: block;
+  font-size: 0.85em;
+}
+.bioage-vis-bioage {
+  font-weight: bold;
+  color: #333;
+}
+.bioage-vis-actualage {
+  color: #555;
+  font-style: italic;
+}
+.bioage-vis-gap {
+  font-weight: bold;
+  color: #333;
+}
+.bioage-vis-track-wrapper {
+  position: relative;
+  margin-top: 5px;
+}
+.bioage-vis-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.bioage-vis-line-zero {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #bdbdbd;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.bioage-vis-gap-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  z-index: 2;
+}
+.bioage-vis-track-labels {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  width: 100%;
+  margin-top: 3px;
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+.bioage-vis-scale-label {
+  font-size: 0.7em;
+  color: #666;
+}
+.bioage-vis-scale-label-left {
+  text-align: left;
+}
+.bioage-vis-scale-label-center {
+  text-align: center;
+  padding: 0 3px;
+}
+.bioage-vis-scale-label-right {
+  text-align: right;
+}
+
+/* biomarkers vs reference ranges visuals */
+.brb-main-container {
+  font-family: Arial, sans-serif;
+  width: 100%;
+  min-width: 250px;
+  padding: 5px 0;
+  box-sizing: border-box;
+}
+.brb-header {
+  margin-bottom: 5px;
+}
+.brb-title {
+  font-weight: bold;
+  font-size: 1em;
+  display: block;
+  color: #333;
+}
+.brb-range-text {
+  font-size: 0.8em;
+  color: #555;
+  display: block;
+}
+.brb-bar-area {
+  position: relative;
+  width: 100%;
+  padding-top: 25px;
+  padding-bottom: 20px;
+  box-sizing: border-box;
+}
+.brb-bar-container {
+  display: flex;
+  height: 18px;
+  border-radius: 3px;
+  overflow: hidden;
+  background-color: #e0e0e0;
+}
+.brb-segment {
+  height: 100%;
+}
+.brb-label-container {
+  position: relative;
+  width: 100%;
+  height: 15px;
+  margin-top: 4px;
+}
+.brb-label {
+  position: absolute;
+  font-size: 0.75em;
+  white-space: nowrap;
+  color: #333;
+}
+.brb-label--left-edge {
+  transform: translateX(0%);
+}
+.brb-label--center {
+  transform: translateX(-50%);
+}
+.brb-label--right-edge {
+  transform: translateX(-100%);
+}
+.brb-marker-wrapper {
+  position: absolute;
+  top: 0px;
+  height: auto;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+.brb-marker-value {
+  display: block;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-align: center;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+.brb-marker-triangle {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid rgba(0, 0, 0, 0.7);
+  margin: 0 auto;
+}
+
+/* Common Chart Styles (bah & bmt) */
+.bah-chart-container,
+.bmt-chart-container {
+  font-family: Arial, sans-serif;
+  border: 1px solid #dee2e6;
+  padding: 15px 20px;
+  border-radius: 0.25rem;
+  background-color: #fff;
+  box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+  overflow-x: auto;
+}
+.bah-svg-chart,
+.bmt-svg-chart {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+.bah-axes line,
+.bmt-axes line {
+  stroke: #adb5bd;
+  stroke-width: 1px;
+}
+.bah-axis-label,
+.bmt-axis-label {
+  font-size: 0.7rem;
+  fill: #495057;
+  text-anchor: middle;
+}
+.bah-y-axis-label,
+.bmt-y-axis-label {
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+.bah-grid-line,
+.bmt-grid-line {
+  stroke: #e9ecef;
+  stroke-width: 0.75px;
+}
+.bah-data-line,
+.bmt-data-line {
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* biomarker trend styles (specifics) */
+.bmt-chart-container {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.bmt-chart-title {
+  text-align: center;
+  font-size: 1.2em;
+  margin-bottom: 15px;
+  color: #212529;
+}
+.bmt-line-label {
+  font-size: 0.7em;
+  dominant-baseline: middle;
+  text-anchor: start;
+}
+
+/* biological age history styles (specifics) */
+.bah-chart-container {
+  margin-top: 25px;
+  margin-bottom: 25px;
+}
+.bah-chart-title {
+  text-align: center;
+  font-size: 1.25em;
+  margin-bottom: 20px;
+  color: #212529;
+}
+.bah-line-label {
+  font-size: 0.65em;
+  dominant-baseline: middle;
+  text-anchor: start;
+}
+.bah-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 15px;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid #e9ecef;
+  font-size: 0.8em;
+}
+.bah-legend-item {
+  display: flex;
+  align-items: center;
+  color: #343a40;
+}
+.bah-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+.bah-grid-line.bah-zero-line-prominent {
+  stroke: #333b42;
+  stroke-width: 1.25px;
+  stroke-dasharray: none;
+}
+.bah-y-axis-label.bah-zero-label-prominent {
+  font-weight: bold;
+  fill: #333b42;
+}
+
+/* biomarker reference ranges styles */
+.srb-area {
+  font-family: Arial, sans-serif;
+  padding: 5px 0;
+  min-width: 200px;
+  box-sizing: border-box;
+}
+.srb-track {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background-color: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.srb-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: #007bff;
+  border-radius: 3px;
+}
+.srb-label-container {
+  position: relative;
+  width: 100%;
+  height: 15px;
+  margin-top: 3px;
+}
+.srb-value-label {
+  position: absolute;
+  font-size: 0.75em;
+  color: #495057;
+  white-space: nowrap;
+  padding: 0 2px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
 }
