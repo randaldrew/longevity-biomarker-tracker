@@ -435,12 +435,20 @@ function trendForm() {
       sel.appendChild(op);
     });
     form.appendChild(sel);
-    form.innerHTML += `
-      <label class="small">Number of points</label>
-      <input type="number" id="trendLimit" value="10" min="3" max="50">
-    `;
+    const label = document.createElement("label");
+    label.className = "small";
+    label.textContent = "Number of points";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.id = "trendLimit";
+    input.value = "10";
+    input.min = "3";
+    input.max = "50";
+    form.appendChild(label);
+    form.appendChild(input);
     const btn = document.createElement("button");
     btn.textContent = "Run";
+    const results = document.createElement("div");
     btn.onclick = () => {
       api
         .trend(
@@ -449,11 +457,11 @@ function trendForm() {
           parseInt(document.querySelector("#trendLimit").value)
         )
         .then((d) => {
-          content.innerHTML = `<h2>Trend - Biomarker ${sel.value}</h2>`;
+          results.innerHTML = `<h2>Trend - Biomarker ${sel.value}</h2>`;
           const canvas = document.createElement("canvas");
           canvas.width = 600;
           canvas.height = 300;
-          content.appendChild(canvas);
+          results.appendChild(canvas);
           drawTrend(canvas, d.trend);
           const t = makeTable(["Date", "Value"]);
           d.trend.reverse().forEach((r) => {
@@ -461,12 +469,13 @@ function trendForm() {
             tr.innerHTML = `<td>${r.date}</td><td>${r.value}</td>`;
             t.appendChild(tr);
           });
-          content.appendChild(t);
+          results.appendChild(t);
         })
         .catch(showError);
     };
     form.appendChild(btn);
     content.appendChild(form);
+    content.appendChild(results);
   });
 }
 
