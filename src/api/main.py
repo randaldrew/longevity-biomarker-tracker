@@ -225,7 +225,7 @@ def user_profile(userId: int, db=Depends(get_db)):
 
 @app.get("/api/v1/users/{userId}/bio-age")
 def get_current_biological_age(userId: int, db=Depends(get_db)):
-    """Query 3: Get Current Biological Age (agegap = biological age - chronological age)"""
+    """Query 3: Get current biological age (agegap = biological age - chronological age)"""
     with db.cursor() as cursor:
         query = """
         SELECT
@@ -511,7 +511,7 @@ def biomarker_trends(
     range: str = "6months",
     db=Depends(get_db),
 ):
-    """Query 6: Show how biological age has changed over multiple calculations"""
+    """Query 6: Show historical values for specific biomarker over time"""
     # ----  parse input to calculate upto when the Biomarker should be queried -----------------------------------------
     range = range.strip()
     number, text = "", ""
@@ -699,7 +699,7 @@ def get_users_with_sessions(db=Depends(get_db)):
 
 @app.get("/api/v1/biomarkers/measurement-summary")
 def get_biomarkers_with_counts(db=Depends(get_db)):
-    """Query 12: List biomarkers with their measurement count"""
+    """Query 12: List all biomarkers with their measurement count"""
     with db.cursor() as cursor:
         query = """
         SELECT
