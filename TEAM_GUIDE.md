@@ -8,14 +8,14 @@ Welcome to the repo! This page is the **source‑of‑truth for who owns what, w
 
 ## 1 · Team roles & areas of ownership
 
-|  Role                                     |  Status                              |  Main goals                                                  |  Owns these paths                                     |
-| ----------------------------------------- | ------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
-| **Database Architect (@db‑architect)**    | ✅ **COMPLETE** (Schema v1.3 frozen) | • keep the schema in 3 NF  • publish the ER diagram         | `/sql/`, `/docs/er_diagram.*`, `/verify_db_setup.py` |
-| **Data Engineer (@data‑engineer)**        | 📋 **TODO:** Transform notebook      | • pull NHANES XPTs  • clean → CSVs  • bulk‑load into MySQL  | `/etl/`, `/data/raw/`, `/data/clean/`, `/notebooks/` |
-| **Backend Lead (@backend‑lead)**          | 📋 **TODO:** Real API endpoints     | • convert FastAPI stubs to real endpoints  • add unit tests | `/src/api/`, `/tests/`                               |
-| **Analytics / UI Lead (@analytics‑lead)** | 📋 **TODO:** Full dashboard         | • build Streamlit dashboard  • charts & tables              | `/src/ui/`, `/src/analytics/`                        |
+| Role                                      | Status                               | Main goals                                                 | Owns these paths                                     |
+| ----------------------------------------- | ------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------- |
+| **Database Architect (@db‑architect)**    | ✅ **COMPLETE** (Schema v1.3 frozen) | • keep the schema in 3 NF • publish the ER diagram         | `/sql/`, `/docs/er_diagram.*`, `/verify_db_setup.py` |
+| **Data Engineer (@data‑engineer)**        | 📋 **TODO:** Transform notebook      | • pull NHANES XPTs • clean → CSVs • bulk‑load into MySQL   | `/etl/`, `/data/raw/`, `/data/clean/`, `/notebooks/` |
+| **Backend Lead (@backend‑lead)**          | 📋 **TODO:** Real API endpoints      | • convert FastAPI stubs to real endpoints • add unit tests | `/src/api/`, `/tests/`                               |
+| **Analytics / UI Lead (@analytics‑lead)** | 📋 **TODO:** Full dashboard          | • build dashboard • charts & tables                        | `/src/ui/`, `/src/analytics/`                        |
 
-> **Branch etiquette**  → *One feature = one branch.* Open a PR, request review from anyone whose code you touch. **CI must be green** before merge.
+> **Branch etiquette** → _One feature = one branch._ Open a PR, request review from anyone whose code you touch. **CI must be green** before merge.
 
 ---
 
@@ -35,7 +35,7 @@ Welcome to the repo! This page is the **source‑of‑truth for who owns what, w
 ├── src/
 │   ├─ api/          ← FastAPI app ✅ Stub endpoints working
 │   ├─ analytics/    ← ✅ HD calculator ready
-│   └─ ui/           ← ✅ Streamlit scaffold working
+│   └─ ui/           ← ✅ Frontend working
 ├── tests/           ← ✅ pytest suite passing (100%)
 ├── scripts/         ← ✅ Bootstrap scripts & utilities
 │   ├─ bootstrap_venv.sh    ← Virtual environment setup
@@ -52,33 +52,35 @@ Welcome to the repo! This page is the **source‑of‑truth for who owns what, w
 
 ### 2b · File‑by‑file cheat‑sheet
 
-| Path                       | Status | What it is / Why it matters                                                                                                             |
-| -------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `sql/schema.sql`           | ✅     | **FROZEN v1.3** - Complete DDL with Anthropometry table, explicit FKs, optimized views                                                |
-| `sql/01_seed.sql`          | ✅     | Biomarkers (9), models (2), coefficients (9), reference ranges (20)                                                                   |
-| `verify_db_setup.py`       | ✅     | **Comprehensive validation** - Scientific accuracy, schema integrity, performance                                                      |
-| `etl/download_nhanes.py`   | ✅     | Pulls 6 NHANES XPT files (2017‑2018 cycle) including BMX_J for anthropometry                                                          |
-| `etl/transform.ipynb`      | 📋     | **TODO (Data Engineer):** Clean XPTs → 4 CSVs (users, sessions, measurements, anthropometry)                                          |
-| `etl/load.sh`              | ✅     | Bulk‑loads CSVs + creates sample dump for CI. Handles missing files gracefully.                                                       |
-| `scripts/bootstrap_venv.sh` | ✅     | **Complete Python setup** - Creates .venv, installs deps, configures hooks                                                            |
-| `docker-compose.yml`       | ✅     | MySQL 8 (port 3307) + Adminer (port 8080). Auto-loads schema on first boot.                                                           |
-| `Makefile`                 | ✅     | **All targets verified** - `make db`, `make etl`, `make run`, `make ui`, `make test`                                                   |
-| `src/api/main.py`          | ✅📋    | FastAPI with working stub endpoints. Ready for Backend Lead to implement.                                                              |
-| `src/ui/app.py`            | ✅📋    | Streamlit scaffold with API health check. Ready for UI Lead to extend.                                                                 |
-| `src/analytics/hd.py`      | ✅     | **Complete HD calculator** with BMI-filtered reference population                                                                      |
-| `tests/`                   | ✅     | Full test suite passing. DB + API fixtures, schema integrity checks.                                                                   |
-| `.github/workflows/ci.yml` | ✅     | **All checks green** - Schema validation, dependency install, test execution                                                          |
-| `.pre-commit-config.yaml`  | ✅     | Black, flake8, trailing whitespace. **SQLFluff commented** (parsing issues with complex DDL)                                          |
+| Path                        | Status | What it is / Why it matters                                                                  |
+| --------------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `sql/schema.sql`            | ✅     | **FROZEN v1.3** - Complete DDL with Anthropometry table, explicit FKs, optimized views       |
+| `sql/01_seed.sql`           | ✅     | Biomarkers (9), models (2), coefficients (9), reference ranges (20)                          |
+| `verify_db_setup.py`        | ✅     | **Comprehensive validation** - Scientific accuracy, schema integrity, performance            |
+| `etl/download_nhanes.py`    | ✅     | Pulls 6 NHANES XPT files (2017‑2018 cycle) including BMX_J for anthropometry                 |
+| `etl/transform.ipynb`       | 📋     | **TODO (Data Engineer):** Clean XPTs → 4 CSVs (users, sessions, measurements, anthropometry) |
+| `etl/load.sh`               | ✅     | Bulk‑loads CSVs + creates sample dump for CI. Handles missing files gracefully.              |
+| `scripts/bootstrap_venv.sh` | ✅     | **Complete Python setup** - Creates .venv, installs deps, configures hooks                   |
+| `docker-compose.yml`        | ✅     | MySQL 8 (port 3307) + Adminer (port 8080). Auto-loads schema on first boot.                  |
+| `Makefile`                  | ✅     | **All targets verified** - `make db`, `make etl`, `make run`, `make ui`, `make test`         |
+| `src/api/main.py`           | ✅📋   | FastAPI with working stub endpoints. Ready for Backend Lead to implement.                    |
+| `src/ui/index.html`         | ✅📋   | Frontend for running queries and interacting with backend.                                   |
+| `src/ui/main.js`            | ✅📋   | JavaScript code powering the frontend.                                                       |
+| `src/analytics/hd.py`       | ✅     | **Complete HD calculator** with BMI-filtered reference population                            |
+| `tests/`                    | ✅     | Full test suite passing. DB + API fixtures, schema integrity checks.                         |
+| `.github/workflows/ci.yml`  | ✅     | **All checks green** - Schema validation, dependency install, test execution                 |
+| `.pre-commit-config.yaml`   | ✅     | Black, flake8, trailing whitespace. **SQLFluff commented** (parsing issues with complex DDL) |
 
 ### 2c · Demo data workflow
 
-| File | Purpose | Usage |
-|------|---------|-------|
-| `sql/demo_users.sql` | **6 demo personas** with realistic medical data | `make seed-demo` |
-| `make seed-demo` | Load demo users (101-106) into database | Run after `make db` |
-| `make verify-demo-data` | Check demo users loaded correctly | Quick validation |
+| File                    | Purpose                                         | Usage               |
+| ----------------------- | ----------------------------------------------- | ------------------- |
+| `sql/demo_users.sql`    | **6 demo personas** with realistic medical data | `make seed-demo`    |
+| `make seed-demo`        | Load demo users (101-106) into database         | Run after `make db` |
+| `make verify-demo-data` | Check demo users loaded correctly               | Quick validation    |
 
 **Demo Users Quick Reference:**
+
 - **User 101:** Healthy 29F (bio-age 24) - Perfect for Q1, Q2, Q3, Q4
 - **User 103:** Wellness enthusiast 38F with **3 sessions** - Star of Q5, Q6, Q7 trends
 - **User 102:** Stressed executive 45M (bio-age 52) - Age acceleration demo
@@ -116,7 +118,7 @@ python verify_db_setup.py    # Comprehensive validation ✅
 
 # 7 · Fire up services (each in a new terminal)
 make run               # FastAPI on http://127.0.0.1:8000
-make ui                # Streamlit on http://127.0.0.1:8501
+make ui                # HTTP server on http://127.0.0.1:80
 ```
 
 **✅ If all steps complete without errors, you're ready to develop!**
@@ -127,20 +129,20 @@ make ui                # Streamlit on http://127.0.0.1:8501
 
 ### ✅ **Schema v1.3 (FINAL & FROZEN)**
 
-| Component | Count | Status |
-|-----------|-------|--------|
-| **Tables** | 9 | All created with proper constraints |
-| **Views** | 4 | Optimized for API/analytics |
-| **Indexes** | 3 | Performance-tuned for trend queries |
-| **Foreign Keys** | 9 | All have explicit names |
-| **Biomarkers** | 9 | NHANES-validated for biological age |
-| **Models** | 2 | Phenotypic Age + Homeostatic Dysregulation |
+| Component        | Count | Status                                     |
+| ---------------- | ----- | ------------------------------------------ |
+| **Tables**       | 9     | All created with proper constraints        |
+| **Views**        | 4     | Optimized for API/analytics                |
+| **Indexes**      | 3     | Performance-tuned for trend queries        |
+| **Foreign Keys** | 9     | All have explicit names                    |
+| **Biomarkers**   | 9     | NHANES-validated for biological age        |
+| **Models**       | 2     | Phenotypic Age + Homeostatic Dysregulation |
 
 ### 🧬 **Biological Age Models (Scientifically Validated)**
 
-| Model | Status | Description |
-|-------|--------|-------------|
-| **Phenotypic Age** | ✅ Validated | Levine et al. 2018 coefficients exactly matched |
+| Model                         | Status       | Description                                                  |
+| ----------------------------- | ------------ | ------------------------------------------------------------ |
+| **Phenotypic Age**            | ✅ Validated | Levine et al. 2018 coefficients exactly matched              |
 | **Homeostatic Dysregulation** | ✅ Validated | BMI-filtered reference population (20-30 yrs, BMI 18.5-29.9) |
 
 ### 📊 **Key Tables**
@@ -155,20 +157,21 @@ make ui                # Streamlit on http://127.0.0.1:8501
 
 ## 5 · Daily workflow cheatsheet
 
-| Action | Command | Notes |
-|--------|---------|-------|
-| **Fresh start** | `make db && make seed-demo` | Database + demo users |
-| **Reset after schema changes** | `make db-reset && make seed-demo` | **Always re-seed after reset** |
-| **Start backend** | `make run` | FastAPI with demo data ready |
-| **Start frontend** | `make ui` | Streamlit with 6 users available |
-| **Verify demo data** | `make verify-demo-data` | Check 6 users loaded correctly |
-| **Run tests** | `make test` | Uses sample dump, not demo users |
+| Action                         | Command                           | Notes                            |
+| ------------------------------ | --------------------------------- | -------------------------------- |
+| **Fresh start**                | `make db && make seed-demo`       | Database + demo users            |
+| **Reset after schema changes** | `make db-reset && make seed-demo` | **Always re-seed after reset**   |
+| **Start backend**              | `make run`                        | FastAPI with demo data ready     |
+| **Start frontend**             | `make ui`                         | HTTP server                      |
+| **Verify demo data**           | `make verify-demo-data`           | Check 6 users loaded correctly   |
+| **Run tests**                  | `make test`                       | Uses sample dump, not demo users |
 
 ---
 
 ## 6 · Team handoff status & next steps
 
 ### ✅ **Database Architect - COMPLETE**
+
 - [x] Schema design (3NF, all constraints)
 - [x] Scientific validation (coefficients match literature)
 - [x] Performance optimization (indexes, views)
@@ -176,6 +179,7 @@ make ui                # Streamlit on http://127.0.0.1:8501
 - [x] Team infrastructure (Docker, Make, CI/CD)
 
 ### 📋 **Data Engineer - TODO**
+
 ```bash
 # Your main task: Complete etl/transform.ipynb
 # Generate these 4 CSVs from the 6 downloaded XPT files:
@@ -188,6 +192,7 @@ make ui                # Streamlit on http://127.0.0.1:8501
 ```
 
 ### 📋 **Backend Lead - TODO**
+
 ```bash
 # Replace API stubs with real database queries in src/api/main.py
 # Key endpoints to implement:
@@ -200,6 +205,7 @@ make ui                # Streamlit on http://127.0.0.1:8501
 ```
 
 ### 📋 **UI Lead - TODO**
+
 ```bash
 # Extend src/ui/app.py with:
 # - Biomarker visualization (trends, reference ranges)
@@ -215,16 +221,19 @@ make ui                # Streamlit on http://127.0.0.1:8501
 ## 7 · Development tools & services
 
 ### 🗄️ **Database Access**
+
 - **Adminer GUI:** [http://localhost:8080](http://localhost:8080)
   - Server: `db` | User: `biomarker_user` | Pass: `biomarker_pass` | DB: `longevity`
 - **Command line:** `mysql -h localhost -P 3307 -u biomarker_user -pbiomarker_pass longevity`
 
 ### 🔧 **Service URLs**
+
 - **API:** [http://localhost:8000](http://localhost:8000) (with hot reload)
 - **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
-- **Dashboard:** [http://localhost:8501](http://localhost:8501) (Streamlit)
+- **Dashboard:** [http://localhost:80](http://localhost:80) (HTTP server)
 
 ### 📝 **Code Quality**
+
 - **Pre-commit hooks:** Auto-run black, flake8, trailing whitespace
 - **SQLFluff:** Available but commented (parsing issues with complex DDL) - see `docs/sqlfluff_status.md`
 - **CI/CD:** All checks must pass before merge
@@ -236,15 +245,19 @@ make ui                # Streamlit on http://127.0.0.1:8501
 <details><summary><strong>Port conflicts (3307/8000/8501 already in use)?</strong></summary>
 
 Edit `.env` file and change:
+
 ```bash
 MYSQL_PORT=3308        # Change from 3307
 APP_API_PORT=8001      # Change from 8000
 ```
-For Streamlit, edit the `make ui` target in `Makefile`:
+
+For the HTTP server, edit the `make ui` target in `Makefile`:
+
 ```bash
 ui:
-	$(VENV_ACTIVATE) cd src/ui && streamlit run app.py --server.port 8502
+	$(VENV_ACTIVATE) cd src/ui && python -m http.server 8502
 ```
+
 </details>
 
 <details><summary><strong>Virtual environment issues?</strong></summary>
@@ -260,6 +273,7 @@ source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 pre-commit install
 ```
+
 </details>
 
 <details><summary><strong>Database connection errors?</strong></summary>
@@ -275,6 +289,7 @@ make db
 sleep 10     # Wait for full startup
 make db-reset
 ```
+
 </details>
 
 <details><summary><strong>Tests failing?</strong></summary>
@@ -292,6 +307,7 @@ pytest tests/ -v
 
 # Check CI logs on GitHub for environment-specific issues
 ```
+
 </details>
 
 <details><summary><strong>SQLFluff integration?</strong></summary>
@@ -301,6 +317,7 @@ SQLFluff is available but has parsing issues with our complex MySQL DDL (multi-l
 **Current status:** Commented out in pre-commit, can be used manually for simpler SQL files.
 
 See `docs/sqlfluff_status.md` for details and workarounds.
+
 </details>
 
 <details><summary><strong>How to add new Python dependencies?</strong></summary>
@@ -314,17 +331,20 @@ See `docs/sqlfluff_status.md` for details and workarounds.
 <details><summary><strong>Which demo user should I use for testing?</strong></summary>
 
 **Quick reference:**
+
 - **User 101:** All optimal values, perfect for "happy path" testing
 - **User 103:** 3 sessions of data, use for trend analysis (Q5, Q6, Q7)
 - **User 102:** Multiple abnormal values, good for edge cases
 - **See full persona table in query implementation guide**
 
 All demo users have UserIDs 101-106, SEQN 100001-100006.
+
 </details>
 
 <details><summary><strong>Why does my query return empty results?</strong></summary>
 
 Most likely you forgot to load demo data:
+
 ```bash
 make seed-demo
 make verify-demo-data  # Should show 6 users
@@ -345,3 +365,4 @@ make verify-demo-data  # Should show 6 users
 ---
 
 *Last updated: May 14, 2025 | Schema v1.3 | Team Guide v1.0*
+```

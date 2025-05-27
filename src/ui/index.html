@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Longevity Biomarker Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Longevity Biomarker Tracker</h1>
+      <p>Upload and explore your biomarker data to extend your healthspan.</p>
+    </header>
+    <main>
+      <nav>
+        <h3>Current User</h3>
+        <select id="userSelect"></select>
+        <h3 style="margin-top: 24px">Queries</h3>
+        <div class="query-item">
+          <input type="radio" name="query" id="q1" value="listUsers" /><label
+            for="q1"
+            >1. List all users</label
+          >
+        </div>
+        <div class="query-item">
+          <input type="radio" name="query" id="q2" value="userProfile" /><label
+            for="q2"
+            >2. User profile</label
+          >
+        </div>
+        <div class="query-item">
+          <input type="radio" name="query" id="q3" value="bioAge" /><label
+            for="q3"
+            >3. User biological age</label
+          >
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q4"
+            value="addMeasurements"
+          /><label for="q4">4. Add new measurements</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q5"
+            value="compareRanges"
+          /><label for="q5">5. Biomarkers vs reference ranges</label>
+        </div>
+        <div class="query-item">
+          <input type="radio" name="query" id="q6" value="trend" /><label
+            for="q6"
+            >6. Biomarker trend</label
+          >
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q7"
+            value="bioAgeHistory"
+          /><label for="q7">7. Biological age history</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q8"
+            value="sessionDetails"
+          /><label for="q8">8. Session details</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q9"
+            value="biomarkerCatalog"
+          /><label for="q9">9. Biomarker catalog</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q10"
+            value="biomarkerRanges"
+          /><label for="q10">10. Biomarker reference ranges</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q11"
+            value="usersSessionSummary"
+          /><label for="q11">11. Users with session count</label>
+        </div>
+        <div class="query-item">
+          <input
+            type="radio"
+            name="query"
+            id="q12"
+            value="biomarkersWithMeasurements"
+          /><label for="q12">12. Biomarkers with measurement count</label>
+        </div>
+        <button id="runBtn">Run / Refresh</button>
+      </nav>
+      <section id="content">
+        <p>Select a query from the left to begin.</p>
+      </section>
+    </main>
+    <footer>© 2025 Longevity Biomarker Tracker</footer>
+    <script src="main.js"></script>
+  </body>
+</html>

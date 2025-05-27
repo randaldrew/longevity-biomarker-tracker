@@ -15,7 +15,7 @@ cp .env.example .env
 make install          # python deps + pre-commit
 make db               # starts MySQL + Adminer on :3307
 make run              # FastAPI on :8000
-make ui               # Do this in a new terminal.  Streamlit on :8501 (hit Enter at e-mail prompt)
+make ui               # Do this in a new terminal. Then open http://localhost:80
 # ETL is optional until the transform notebook is finished
 ```
 
