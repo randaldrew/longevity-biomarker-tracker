@@ -153,6 +153,22 @@ const api = {
     return res.json();
     // -> { ranges: [...] }
   },
+
+  // 11. Users with session summary
+  usersSessionSummary: async () => {
+    const res = await fetch(`${API_BASE}/users/session-summary`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { users: [...] }
+  },
+
+  // 12. Biomarkers with measurement summary
+  biomarkersWithMeasurements: async () => {
+    const res = await fetch(`${API_BASE}/biomarkers/measurement-summary`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+    // -> { biomarkers: [...] }
+  },
 };
 
 /* UI globals */
@@ -164,7 +180,6 @@ let selectedUserId = null;
 api.listUsers().then((d) => {
   const sel = document.querySelector("#userSelect");
   sel.innerHTML = '<option value="">— select user —</option>';
-  console.log(d)
   d.users.forEach((u) => {
     const opt = document.createElement("option");
     opt.value = u.userId;
@@ -268,7 +283,7 @@ function bioAge() {
       content.appendChild(document.createElement("br"));
       for (const modelName of ["Phenotypic Age", "Homeostatic Dysregulation"]) {
         const btn = document.createElement("button");
-        btn.textContent = "Recalculate " + modelName
+        btn.textContent = "Recalculate " + modelName;
         btn.onclick = () => {
           api.calculateBioAge(selectedUserId, modelName).then((d) => {
             bioAge();
@@ -368,11 +383,8 @@ function compareRangesForm() {
     api
       .compareRanges(selectedUserId, document.querySelector("#rangeType").value)
       .then((d) => {
-        console.log(d)
-        const rangeType = document.querySelector("#rangeType").value
-        results.innerHTML = `<h2>Range Comparison - ${
-          rangeType
-        }</h2>`;
+        const rangeType = document.querySelector("#rangeType").value;
+        results.innerHTML = `<h2>Range Comparison - ${rangeType}</h2>`;
         const t = makeTable([
           "Biomarker",
           "Value",
@@ -381,22 +393,19 @@ function compareRangesForm() {
           "Longevity",
         ]);
         d.ranges.forEach((r) => {
-          console.log(r.clinicalRange, JSON.parse(r.clinicalRange))
-          const clinicalRange = rangeType != "longevity" && JSON.parse(r.clinicalRange)
-          const longevityRange = rangeType != "clinical" && JSON.parse(r.longevityRange)
+          const clinicalRange =
+            rangeType != "longevity" && JSON.parse(r.clinicalRange);
+          const longevityRange =
+            rangeType != "clinical" && JSON.parse(r.longevityRange);
           const tr = document.createElement("tr");
           tr.innerHTML = `<td>${r.name}</td><td>${
             r.value
           }</td><td class="status-${r.status.toLowerCase()}">${
             r.status == "OutOfRange" ? "Out of Range" : r.status
           }</td><td>${
-            clinicalRange
-              ? `${clinicalRange.min}-${clinicalRange.max}`
-              : "—"
+            clinicalRange ? `${clinicalRange.min}-${clinicalRange.max}` : "—"
           }</td><td>${
-            longevityRange
-              ? `${longevityRange.min}-${longevityRange.max}`
-              : "—"
+            longevityRange ? `${longevityRange.min}-${longevityRange.max}` : "—"
           }</td>`;
           t.appendChild(tr);
         });
@@ -491,60 +500,58 @@ function sessionDetailsForm() {
   form.className = "form-block";
   form.innerHTML = `<h4>Session Details - User ${selectedUserId}</h4>`;
   const results = document.createElement("div");
-  api
-    .listUsers()
-    .then((data) => {
-      const sessionCount = data.users
-        .find((u) => u.userId == selectedUserId)
-        .sessionCount;
-      if (sessionCount === 0) {
-        form.innerHTML += `<p>No sessions found.</p>`;
-        results.appendChild(form);
-        return;
-      }
-      form.innerHTML += `<label class="small">Select Session</label>`;
-      const sel = document.createElement("select");
-      sel.id = "sessSelect";
-      for (let sid = 1; sid <= sessionCount; sid++) {
-        const op = document.createElement("option");
-        op.value = sid;
-        op.textContent = `Session ${sid}`;
-        sel.appendChild(op);
-      }
-      form.appendChild(sel);
-      const btn = document.createElement("button");
-      btn.textContent = "Run";
-      btn.onclick = () => {
-        const sid = parseInt(document.querySelector("#sessSelect").value);
-        api
-          .getSessionDetails(selectedUserId, sid)
-          .then((d) => {
-            results.innerHTML = `
+  api.listUsers().then((data) => {
+    const sessionCount = data.users.find(
+      (u) => u.userId == selectedUserId
+    ).sessionCount;
+    if (sessionCount === 0) {
+      form.innerHTML += `<p>No sessions found.</p>`;
+      results.appendChild(form);
+      return;
+    }
+    form.innerHTML += `<label class="small">Select Session</label>`;
+    const sel = document.createElement("select");
+    sel.id = "sessSelect";
+    for (let sid = 1; sid <= sessionCount; sid++) {
+      const op = document.createElement("option");
+      op.value = sid;
+      op.textContent = `Session ${sid}`;
+      sel.appendChild(op);
+    }
+    form.appendChild(sel);
+    const btn = document.createElement("button");
+    btn.textContent = "Run";
+    btn.onclick = () => {
+      const sid = parseInt(document.querySelector("#sessSelect").value);
+      api
+        .getSessionDetails(selectedUserId, sid)
+        .then((d) => {
+          results.innerHTML = `
               <h2>Session ${sid}</h2>
               <p><strong>Date:</strong> ${
                 d.sessionDate
               } &nbsp; <strong>Fasting:</strong> ${
-              d.fastingStatus ? "Yes" : "No"
-            }</p>
+            d.fastingStatus ? "Yes" : "No"
+          }</p>
             `;
-            const t = makeTable(["Biomarker", "Value", "Units"]);
-            d.measurements.forEach((m) => {
-              const tr = document.createElement("tr");
-              tr.innerHTML = `
+          const t = makeTable(["Biomarker", "Value", "Units"]);
+          d.measurements.forEach((m) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
                 <td>${m.name}</td>
                 <td>${m.value}</td>
                 <td>${m.units}</td>
               `;
-              t.appendChild(tr);
-            });
-            results.appendChild(t);
-          })
-          .catch(showError);
-      };
-      form.appendChild(btn);
-      content.appendChild(form);
-      content.appendChild(results);
-    });
+            t.appendChild(tr);
+          });
+          results.appendChild(t);
+        })
+        .catch(showError);
+    };
+    form.appendChild(btn);
+    content.appendChild(form);
+    content.appendChild(results);
+  });
 }
 
 /* Query 9: biomarker catalog */
@@ -624,6 +631,49 @@ function biomarkerRangesForm() {
   });
 }
 
+/* Query 11: users with session summary */
+function usersSessionSummary() {
+  api
+    .usersSessionSummary()
+    .then((data) => {
+      content.innerHTML = "<h2>Users & Session Count</h2>";
+      const t = makeTable(["User ID", "SEQN", "Sex", "Session Count"]);
+      data.users.forEach((u) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${u.UserID}</td>
+          <td>${u.SEQN}</td>
+          <td>${u.Sex}</td>
+          <td>${u.SessionCount}</td>
+        `;
+        t.appendChild(tr);
+      });
+      content.appendChild(t);
+    })
+    .catch(showError);
+}
+
+/* Query 12: biomarkers with measurement summary */
+function biomarkersWithMeasurements() {
+  api
+    .biomarkersWithMeasurements()
+    .then((data) => {
+      content.innerHTML = "<h2>Biomarkers & Measurement Count</h2>";
+      const t = makeTable(["Biomarker", "Units", "Measurement Count"]);
+      data.biomarkers.forEach((b) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${b.Name}</td>
+          <td>${b.Units}</td>
+          <td>${b.MeasurementCount}</td>
+        `;
+        t.appendChild(tr);
+      });
+      content.appendChild(t);
+    })
+    .catch(showError);
+}
+
 /* Trend chart helper */
 function drawTrend(canvas, data) {
   const ctx = canvas.getContext("2d");
@@ -690,6 +740,12 @@ runButton.addEventListener("click", () => {
       break;
     case "biomarkerRanges":
       biomarkerRangesForm();
+      break;
+    case "usersSessionSummary":
+      usersSessionSummary();
+      break;
+    case "biomarkersWithMeasurements":
+      biomarkersWithMeasurements();
       break;
   }
 });
