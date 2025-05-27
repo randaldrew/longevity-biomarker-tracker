@@ -1123,7 +1123,7 @@ const api = {
     // -> { ranges: [...] }
   },
 
-  // 11. Users with session summary
+  // 11. Users age distribution
   ageDistribution: async () => {
     const res = await fetch(`${API_BASE}/users/age-distribution`);
     if (!res.ok) throw new Error(`Error ${res.status}`);
