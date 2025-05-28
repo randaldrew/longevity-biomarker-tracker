@@ -782,7 +782,10 @@ function createBioAgeHistoryChart(
       zeroLineProminent.setAttribute("y1", yZero);
       zeroLineProminent.setAttribute("x2", margin.left + chartWidth);
       zeroLineProminent.setAttribute("y2", yZero);
-      zeroLineProminent.classList.add("bah-grid-line", "bah-zero-line-prominent");
+      zeroLineProminent.classList.add(
+        "bah-grid-line",
+        "bah-zero-line-prominent"
+      );
       axesGroup.appendChild(zeroLineProminent);
       if (!zeroLabelHandledByTickLoop) {
         const yLabelZero = document.createElementNS(svgNs, "text");
@@ -1021,6 +1024,9 @@ const api = {
     const res = await fetch(`${API_BASE}/users/${userId}/bio-age`);
     if (!res.ok) {
       const err = await res.json().catch(() => null);
+      if (res.status === 404) {
+        return { bioAges: [] }; // No bio-age data found
+      }
       throw new Error(err?.detail || `Error ${res.status}`);
     }
     return res.json();
@@ -1222,7 +1228,7 @@ function userProfile() {
           <td>${b.name}</td>
           <td>${b.value}</td>
           <td>${b.units}</td>
-          <td>${b.takenAt}</td>
+          <td>${b.takenAt.slice(0, 10)}</td>
         `;
         t.appendChild(tr);
       });
@@ -1279,9 +1285,12 @@ function bioAge() {
         const btn = document.createElement("button");
         btn.textContent = "Recalculate " + modelName;
         btn.onclick = () => {
-          api.calculateBioAge(selectedUserId, modelName).then((d) => {
-            bioAge();
-          });
+          api
+            .calculateBioAge(selectedUserId, modelName)
+            .then(() => {
+              bioAge();
+            })
+            .catch(showError);
         };
         content.appendChild(btn);
         content.appendChild(document.createTextNode(" "));
@@ -1439,7 +1448,7 @@ function trendForm() {
     const rangeInput = document.createElement("input");
     rangeInput.type = "number";
     rangeInput.id = "trendRangeNum";
-    rangeInput.value = "6";
+    rangeInput.value = "10";
     rangeInput.min = "1";
     rangeInput.style.width = "60px";
     const rangeUnit = document.createElement("select");
@@ -1451,7 +1460,7 @@ function trendForm() {
       rangeUnit.appendChild(opt);
     });
     rangeUnit.style.width = "100px";
-    rangeUnit.value = "months";
+    rangeUnit.value = "years";
     form.appendChild(rangeLabel);
     form.appendChild(document.createElement("br"));
     form.appendChild(rangeInput);
