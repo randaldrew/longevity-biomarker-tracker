@@ -645,20 +645,42 @@ def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
         # ---- measurement data --------------------------------------------------
         query = """
         SELECT
-            BiomarkerID AS biomarkerID,
-            BiomarkerName AS name,
-            Value AS value,
-            Units AS units
-        FROM v_user_latest_measurements view_measurements
-        WHERE UserID = %s
+            m.BiomarkerID   AS biomarkerID,
+            b.Name          AS name,
+            m.Value         AS value,
+            b.Units         AS units
+        FROM Measurement m
+        JOIN Biomarker b ON m.BiomarkerID = b.BiomarkerID
+        WHERE m.SessionID = %s
+        ORDER BY m.BiomarkerID
         """
-        cursor.execute(query, (userId,))
+        cursor.execute(query, (sessionId,))
         measurement_data = cursor.fetchall()
         if not measurement_data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No measurements for this session",
             )
     return session_data | {"measurements": measurement_data}
+
+
+@app.get("/api/v1/users/{userId}/sessions")
+def get_user_sessions(userId: int, db=Depends(get_db)):
+    """Query 8.5: Get all session IDs (and dates) for a given user."""
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT SessionID AS sessionId,
+                   SessionDate AS sessionDate,
+                   FastingStatus AS fastingStatus
+            FROM MeasurementSession
+            WHERE UserID = %s
+            ORDER BY SessionDate
+        """,
+            (userId,),
+        )
+        sessions = cursor.fetchall()
+    return {"sessions": sessions}
 
 
 @app.get("/api/v1/biomarkers")
