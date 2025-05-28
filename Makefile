@@ -124,6 +124,7 @@ clean:
 
 # Clean everything including venv (nuclear option)
 clean-all: clean
+	rm -rf data/raw/*
 	rm -rf .venv
 	rm -rf __pycache__ src/__pycache__ src/*/__pycache__
 	rm -rf .pytest_cache

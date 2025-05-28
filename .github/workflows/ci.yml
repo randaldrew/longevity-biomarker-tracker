@@ -15,7 +15,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8.0.36
         env:
           MYSQL_ROOT_PASSWORD: rootpassword
           MYSQL_DATABASE: longevity_test
@@ -75,6 +75,11 @@ jobs:
 
     - name: Start API server for testing
       env:
+        MYSQL_HOST: 127.0.0.1
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DATABASE: longevity_test
+        MYSQL_PORT: 3307
         DISABLE_HD: "true"
       run: |
         cd src/api

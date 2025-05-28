@@ -1,139 +1,110 @@
-#!/bin/bash
-# create_snapshot.sh - Creates a snapshot of the codebase while excluding large files
+#!/usr/bin/env bash
+# ------------------------------------------------------------------
+# codebase_snapshot.sh – Create a human-readable, self-contained
+# snapshot of the Longevity Biomarker Tracker repo.
+#
+#  • Default (dev) mode: skips files >100 KB to stay fast/light.
+#  • Release mode:  SNAPSHOT_MODE=release  → no size cap.
+#
+# Output: codebase_snapshot.txt (or $OUTPUT_FILE if set)
+# ------------------------------------------------------------------
 
-OUTPUT_FILE="codebase_snapshot.txt"
+set -euo pipefail
 
-# Clear output file if it exists
-> "$OUTPUT_FILE"
+# ── Change to repo root regardless of where script is called from ──
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
-# Write header
-echo "==================================================" >> "$OUTPUT_FILE"
-echo "  LONGEVITY BIOMARKER TRACKER CODEBASE SNAPSHOT   " >> "$OUTPUT_FILE"
-echo "  Created on: $(date)                             " >> "$OUTPUT_FILE"
-echo "==================================================" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# ── Config ─────────────────────────────────────────────────────────
+OUTPUT_FILE="${OUTPUT_FILE:-codebase_snapshot.txt}"
+MAX_BYTES=102400           # 100 KB size cap (dev)
+if [[ "${SNAPSHOT_MODE-}" == "release" ]]; then
+  echo "➡  Snapshot running in RELEASE mode – no file-size cap"
+  MAX_BYTES=999999999
+fi
 
-# Function to write file contents to snapshot
-write_file() {
-  local file="$1"
-  echo "==================================================" >> "$OUTPUT_FILE"
-  echo "FILE: $file" >> "$OUTPUT_FILE"
-  echo "==================================================" >> "$OUTPUT_FILE"
-  echo "" >> "$OUTPUT_FILE"
-  cat "$file" >> "$OUTPUT_FILE"
-  echo "" >> "$OUTPUT_FILE"
-  echo "" >> "$OUTPUT_FILE"
+# ── Helpers ────────────────────────────────────────────────────────
+write_header() {
+  printf "==================================================\n"          >> "$OUTPUT_FILE"
+  printf "  LONGEVITY BIOMARKER TRACKER CODEBASE SNAPSHOT   \n"         >> "$OUTPUT_FILE"
+  printf "  Created on: %s                             \n" "$(date)"    >> "$OUTPUT_FILE"
+  printf "==================================================\n\n"        >> "$OUTPUT_FILE"
 }
 
-# List of patterns to exclude
-EXCLUDE_PATTERNS=(
-  # Data files
-  "data/raw/*"
-  "data/clean/*"
+write_file() {
+  local file="$1"
+  printf "==================================================\n"         >> "$OUTPUT_FILE"
+  printf "FILE: %s\n" "$file"                                         >> "$OUTPUT_FILE"
+  printf "==================================================\n\n"       >> "$OUTPUT_FILE"
+  cat "$file"                                                        >> "$OUTPUT_FILE"
+  printf "\n\n"                                                      >> "$OUTPUT_FILE"
+}
 
-  # Database dumps
-  "*.dump"
+sanitise_ipynb() {
+  local nb="$1"
+  printf "==================================================\n"         >> "$OUTPUT_FILE"
+  printf "FILE: %s (code cells only, outputs excluded)\n" "$nb"        >> "$OUTPUT_FILE"
+  printf "==================================================\n\n"       >> "$OUTPUT_FILE"
+  if command -v jq >/dev/null 2>&1; then
+    jq 'del(.cells[].outputs) | del(.cells[].execution_count)' "$nb"  >> "$OUTPUT_FILE"
+  else
+    printf "[WARN] jq not found – raw notebook omitted]\n"            >> "$OUTPUT_FILE"
+  fi
+  printf "\n\n"                                                      >> "$OUTPUT_FILE"
+}
 
-  # Virtual environment
-  "venv/*"
+# ── Start fresh ────────────────────────────────────────────────────
+: > "$OUTPUT_FILE"
+write_header
 
-  # Build artifacts
-  "build/*"
-  "dist/*"
-  "*.egg-info/*"
+# ── Directory tree ────────────────────────────────────────────────
+printf "PROJECT STRUCTURE:\n\n" >> "$OUTPUT_FILE"
+find . -type d \
+  -not -path "*/.*" -not -path "*/.venv*" -not -path "*/node_modules*" \
+  | sort >> "$OUTPUT_FILE"
+printf "\n" >> "$OUTPUT_FILE"
 
-  # Node modules
-  "node_modules/*"
-
-  # Cache files
-  "__pycache__/*"
-  ".pytest_cache/*"
-  ".ipynb_checkpoints/*"
-
-  # Logs
-  "*.log"
-
-  # Large generated files
-  "*.csv"
-  "*.xpt"
-  "*.parquet"
-  "*.feather"
-  "*.pickle"
-
-  # IDE files
-  ".idea/*"
-  ".vscode/*"
-)
-
-# Create exclude options for find command
-EXCLUDE_OPTIONS=""
-for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-  EXCLUDE_OPTIONS="$EXCLUDE_OPTIONS -not -path \"*/$pattern\""
-done
-
-# Write summary of project structure
-echo "PROJECT STRUCTURE:" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-find . -type d -not -path "*/\.*" -not -path "*/venv*" -not -path "*/node_modules*" | sort >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Allow specific SQL files (schema only, not data)
+# Always include the schema first (easy to find)
 write_file "./sql/schema.sql"
 
-# Snapshot all code and configuration files
-# Using separate find commands instead of one big command with exclude options
-# as that can be problematic with shell expansion
-echo "Finding and processing files..."
-find . -type f \( -name "*.py" -o -name "*.ipynb" -o -name "*.md" -o -name "*.sh" -o -name "*.yml" -o -name "*.yaml" -o -name "Makefile" -o -name "Dockerfile" -o -name "docker-compose.yml" -o -name ".env.example" -o -name "*.js" -o -name "*.html" -o -name "*.css" \) \
-  -not -path "*/.venv/*" \
-  -not -path "*/.git/*" \
-  -not -path "*/node_modules/*" \
-  -not -path "*/__pycache__/*" \
-  -not -path "*/.pytest_cache/*" \
+# ── File selection ────────────────────────────────────────────────
+find . -type f \( -name "*.py" -o -name "*.ipynb" -o -name "*.md" \
+                 -o -name "*.sh" -o -name "*.yml" -o -name "*.yaml" \
+                 -o -name "Makefile" -o -name "Dockerfile" \
+                 -o -name "docker-compose.yml" -o -name ".env.example" \
+                 -o -name "*.js" -o -name "*.html" -o -name "*.css" \) \
+  -not -path "*/.git/*" -not -path "*/.venv/*" -not -path "*/node_modules/*" \
+  -not -path "*/__pycache__/*" -not -path "*/.pytest_cache/*" \
   -not -path "*/.ipynb_checkpoints/*" \
-  -not -path "*/data/raw/*" \
-  -not -path "*/data/clean/*" \
-  -not -path "*/build/*" \
-  -not -path "*/dist/*" \
-  -not -path "*/*.egg-info/*" \
-  -not -path "*/.idea/*" \
-  -not -path "*/.vscode/*" \
+  -not -path "*/data/raw/*" -not -path "*/data/clean/*" \
+  -not -path "*/build/*" -not -path "*/dist/*" -not -path "*/*.egg-info/*" \
   | sort | while read -r file; do
-    # Skip large files (> 100KB)
-    file_size=$(wc -c < "$file")
-    if [ "$file_size" -gt 102400 ]; then
-      echo "Skipping large file: $file ($file_size bytes)" >> "$OUTPUT_FILE"
-    else
-      # For notebooks, only include metadata and code, not outputs
-      if [[ "$file" == *.ipynb ]]; then
-        echo "==================================================" >> "$OUTPUT_FILE"
-        echo "FILE: $file (code cells only, outputs excluded)" >> "$OUTPUT_FILE"
-        echo "==================================================" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-        if command -v jq >/dev/null 2>&1; then
-          jq 'del(.cells[].outputs) | del(.cells[].execution_count)' "$file" >> "$OUTPUT_FILE"
-        else
-          echo "[WARN] jq not found – skipping notebook sanitisation" >> "$OUTPUT_FILE"
-        fi
-
-      else
-        write_file "$file"
+      file_size=$(wc -c < "$file")
+      if [ "$file_size" -gt "$MAX_BYTES" ]; then
+        printf "Skipping large file: %s (%s bytes)\n" "$file" "$file_size" >> "$OUTPUT_FILE"
+        continue
       fi
-    fi
+
+      case "$file" in
+        *.ipynb) sanitise_ipynb "$file" ;;
+        *)       write_file     "$file" ;;
+      esac
   done
 
-# Write file count statistics
-echo "==================================================" >> "$OUTPUT_FILE"
-echo "FILE COUNT STATISTICS:" >> "$OUTPUT_FILE"
-echo "==================================================" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Python files: $(find . -name "*.py" -not -path "*/venv/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "Jupyter notebooks: $(find . -name "*.ipynb" -not -path "*/venv/*" -not -path "*/\.*" -not -path "*/.ipynb_checkpoints/*" | wc -l)" >> "$OUTPUT_FILE"
-echo "Shell scripts: $(find . -name "*.sh" -not -path "*/venv/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "Markdown/Documentation: $(find . -name "*.md" -not -path "*/venv/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "YAML/Configuration: $(find . -name "*.yml" -o -name "*.yaml" -not -path "*/venv/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "JavaScript files: $(find . -name "*.js" -not -path "*/venv/*" -not -path "*/node_modules/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "HTML files: $(find . -name "*.html" -not -path "*/venv/*" -not -path "*/node_modules/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
-echo "CSS files: $(find . -name "*.css" -not -path "*/venv/*" -not -path "*/node_modules/*" -not -path "*/\.*" | wc -l)" >> "$OUTPUT_FILE"
+# ── File-count stats ───────────────────────────────────────────────
+printf "==================================================\n"          >> "$OUTPUT_FILE"
+printf "FILE COUNT STATISTICS:\n"                                     >> "$OUTPUT_FILE"
+printf "==================================================\n\n"        >> "$OUTPUT_FILE"
+
+count() { find . -name "$1" -not -path "*/.venv/*" -not -path "*/.*" | wc -l; }
+printf "Python files:              %5s\n" "$(count '*.py')"          >> "$OUTPUT_FILE"
+printf "Jupyter notebooks:         %5s\n" "$(count '*.ipynb')"        >> "$OUTPUT_FILE"
+printf "Shell scripts:             %5s\n" "$(count '*.sh')"           >> "$OUTPUT_FILE"
+printf "Markdown/Documentation:    %5s\n" "$(count '*.md')"           >> "$OUTPUT_FILE"
+printf "YAML/Configuration:        %5s\n" "$(count '*.y*ml')"         >> "$OUTPUT_FILE"
+printf "JavaScript files:          %5s\n" "$(count '*.js')"           >> "$OUTPUT_FILE"
+printf "HTML files:                %5s\n" "$(count '*.html')"         >> "$OUTPUT_FILE"
+printf "CSS files:                 %5s\n" "$(count '*.css')"          >> "$OUTPUT_FILE"
 
 echo "Snapshot created: $OUTPUT_FILE"
