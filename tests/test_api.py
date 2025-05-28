@@ -49,32 +49,58 @@ def test_insufficient_biomarkers_error(api_client, db_cursor):
     # Create user with incomplete biomarker data
     db_cursor.execute(
         """
-                      INSERT INTO User (SEQN, BirthDate, Sex, RaceEthnicity)
-                      VALUES (999998, '1980-01-01', 'M', 'Test')
-                      """
+        INSERT INTO User (SEQN, BirthDate, Sex, RaceEthnicity)
+        VALUES (999998, '1980-01-01', 'M', 'Test')
+        """
     )
     db_cursor.execute("SELECT LAST_INSERT_ID() as user_id")
     user_id = db_cursor.fetchone()["user_id"]
 
-    # Only add 5 biomarkers instead of 9
+    # Create a session
     db_cursor.execute(
         """
-                      INSERT INTO MeasurementSession (UserID, SessionDate, FastingStatus)
-                      VALUES (%s, '2023-01-01', 1)
-                      """,
+        INSERT INTO MeasurementSession (UserID, SessionDate, FastingStatus)
+        VALUES (%s, '2023-01-01', 1)
+        """,
         (user_id,),
     )
+    db_cursor.execute("SELECT LAST_INSERT_ID() as session_id")
+    session_id = db_cursor.fetchone()["session_id"]
+
+    # Add only 5 biomarkers instead of 9 (insufficient for bio-age calculation)
+    for biomarker_id in range(1, 6):  # Only biomarkers 1-5
+        db_cursor.execute(
+            """
+            INSERT INTO Measurement (SessionID, BiomarkerID, Value, TakenAt)
+            VALUES (%s, %s, %s, '2023-01-01 10:00:00')
+            """,
+            (session_id, biomarker_id, 100.0),
+        )
+
+    # Commit the changes so the API can see them
+    db_cursor.connection.commit()
 
     response = api_client.post(f"/api/v1/users/{user_id}/bio-age/calculate")
     assert response.status_code == 400
     assert "Insufficient biomarker data" in response.json()["detail"]
 
 
-def test_duplicate_session_conflict(api_client):
+def test_duplicate_session_conflict(api_client, db_cursor):
     """Test duplicate session creation returns 409"""
     user_id = 1  # Assuming test user exists
+
+    # Use a very specific date that's unlikely to conflict
+    test_date = "2024-12-25"  # Christmas 2024
+
+    # Clean up any existing session for this test
+    db_cursor.execute(
+        "DELETE FROM MeasurementSession WHERE UserID = %s AND SessionDate = %s",
+        (user_id, test_date),
+    )
+    db_cursor.connection.commit()
+
     session_data = {
-        "sessionDate": "2023-12-01",
+        "sessionDate": test_date,
         "fastingStatus": True,
         "measurements": [{"biomarkerId": 1, "value": 4.5}],
     }

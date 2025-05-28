@@ -42,6 +42,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# RD: Need to explicitly handle OPTIONS method in FastAPI
+@app.options("/api/v1/users")
+def options_users():
+    return {"message": "OK"}
+
+
 hd_model = None
 
 
@@ -89,10 +96,10 @@ def startup():
         reference_df["Value"] = reference_df["Value"].astype(float)
         reference_df["BMI"] = reference_df["BMI"].astype(float)
 
-        # Unit conversion: mg/dL → mmol/L
+        # Unit conversion: mg/dL → mmol/L - RD: Small fix to resolve Pandas warning in API
         glucose_mask = reference_df["BiomarkerID"] == 4
-        reference_df["Value"].loc[glucose_mask] = (
-            reference_df["Value"].loc[glucose_mask] / 18
+        reference_df.loc[glucose_mask, "Value"] = (
+            reference_df.loc[glucose_mask, "Value"] / 18
         )
         biomarker_columns = reference_df["BiomarkerName"].unique()
 
@@ -328,9 +335,7 @@ def calculate_biological_age(
                         linear_term += biomarker_value * float(
                             coefficient["coefficient"]
                         )
-                    mortality_score = (
-                        linear_term + math.log(chronological_age) * 0.0804 - 19.9067
-                    )
+                    mortality_score = linear_term + chronological_age * 0.0804 - 19.9067
                     R = min(0.999999, 1 - math.exp(-math.exp(mortality_score)))
                     phenotypic_age = round(
                         141.50 + math.log(-math.log(1 - R)) / 0.09165, 2

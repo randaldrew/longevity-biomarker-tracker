@@ -66,9 +66,55 @@ find . -type d \
 printf "\n" >> "$OUTPUT_FILE"
 
 # Always include the schema first (easy to find)
-write_file "./sql/schema.sql"
+if [[ -f "./sql/schema.sql" ]]; then
+  write_file "./sql/schema.sql"
+fi
 
-# ── File selection ────────────────────────────────────────────────
+# ── Process other SQL files in sql directory (avoid huge dumps) ────
+echo "🗃️  Processing SQL files in sql/ directory..."
+if [[ -d "./sql" ]]; then
+  find ./sql -name "*.sql" -type f | grep -v schema.sql | while read -r sqlfile; do
+    if [[ ! -f "$sqlfile" ]]; then
+      continue
+    fi
+
+    # Skip likely dump files based on name patterns
+    basename_lower=$(basename "$sqlfile" | tr '[:upper:]' '[:lower:]')
+    if [[ "$basename_lower" == *"dump"* ]] || [[ "$basename_lower" == *"backup"* ]] ||
+       [[ "$basename_lower" == *"export"* ]] || [[ "$basename_lower" == *"full"* ]]; then
+      echo "   ⏭️  Skipping likely dump file: $sqlfile"
+      printf "Skipped SQL dump file: %s (likely contains large dataset)\n" "$sqlfile" >> "$OUTPUT_FILE"
+      continue
+    fi
+
+    file_size=$(wc -c < "$sqlfile" 2>/dev/null || echo "0")
+    if [ "$file_size" -gt "$MAX_BYTES" ]; then
+      echo "   ⏭️  Skipping large SQL file: $sqlfile ($file_size bytes)"
+      printf "Skipping large SQL file: %s (%s bytes)\n" "$sqlfile" "$file_size" >> "$OUTPUT_FILE"
+    else
+      echo "   📄 Processing SQL: $sqlfile ($file_size bytes)"
+      write_file "$sqlfile"
+    fi
+  done
+fi
+
+# ── Explicitly capture UI files from src/ui ───────────────────────
+if [[ -d "./src/ui" ]]; then
+  echo "📂 Processing UI files in src/ui..."
+  find ./src/ui -name "*.html" -o -name "*.js" -o -name "*.css" | while read -r uifile; do
+    if [[ -f "$uifile" ]]; then
+      file_size=$(wc -c < "$uifile" 2>/dev/null || echo "0")
+      if [ "$file_size" -le "$MAX_BYTES" ]; then
+        echo "   📄 Processing UI: $uifile ($file_size bytes)"
+        write_file "$uifile"
+      else
+        echo "   ⏭️  Skipping large UI file: $uifile ($file_size bytes)"
+      fi
+    fi
+  done
+fi
+
+# ── File selection (original logic) ───────────────────────────────
 find . -type f \( -name "*.py" -o -name "*.ipynb" -o -name "*.md" \
                  -o -name "*.sh" -o -name "*.yml" -o -name "*.yaml" \
                  -o -name "Makefile" -o -name "Dockerfile" \
@@ -79,6 +125,7 @@ find . -type f \( -name "*.py" -o -name "*.ipynb" -o -name "*.md" \
   -not -path "*/.ipynb_checkpoints/*" \
   -not -path "*/data/raw/*" -not -path "*/data/clean/*" \
   -not -path "*/build/*" -not -path "*/dist/*" -not -path "*/*.egg-info/*" \
+  -not -path "*/src/ui/*" \
   | sort | while read -r file; do
       file_size=$(wc -c < "$file")
       if [ "$file_size" -gt "$MAX_BYTES" ]; then
@@ -97,14 +144,18 @@ printf "==================================================\n"          >> "$OUTP
 printf "FILE COUNT STATISTICS:\n"                                     >> "$OUTPUT_FILE"
 printf "==================================================\n\n"        >> "$OUTPUT_FILE"
 
-count() { find . -name "$1" -not -path "*/.venv/*" -not -path "*/.*" | wc -l; }
+count() { find . -name "$1" -not -path "*/.venv/*" -not -path "*/.*" -not -path "*/node_modules/*" | wc -l; }
 printf "Python files:              %5s\n" "$(count '*.py')"          >> "$OUTPUT_FILE"
 printf "Jupyter notebooks:         %5s\n" "$(count '*.ipynb')"        >> "$OUTPUT_FILE"
 printf "Shell scripts:             %5s\n" "$(count '*.sh')"           >> "$OUTPUT_FILE"
+printf "SQL files:                 %5s\n" "$(count '*.sql')"          >> "$OUTPUT_FILE"
 printf "Markdown/Documentation:    %5s\n" "$(count '*.md')"           >> "$OUTPUT_FILE"
 printf "YAML/Configuration:        %5s\n" "$(count '*.y*ml')"         >> "$OUTPUT_FILE"
 printf "JavaScript files:          %5s\n" "$(count '*.js')"           >> "$OUTPUT_FILE"
 printf "HTML files:                %5s\n" "$(count '*.html')"         >> "$OUTPUT_FILE"
 printf "CSS files:                 %5s\n" "$(count '*.css')"          >> "$OUTPUT_FILE"
 
-echo "Snapshot created: $OUTPUT_FILE"
+echo ""
+echo "✅ Snapshot created: $OUTPUT_FILE"
+echo "📊 UI files found: $(count '*.html') HTML, $(count '*.js') JS, $(count '*.css') CSS"
+echo "🗃️  SQL files found: $(count '*.sql') total"
