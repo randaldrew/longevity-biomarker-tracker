@@ -1110,6 +1110,19 @@ const api = {
     // -> { sessionId, sessionDate, fastingStatus, measurements: [...] }
   },
 
+  // 8.5. Session ids and dates for a user
+  getUserSessions: async (userId) => {
+    const res = await fetch(
+      `${API_BASE}/users/${userId}/sessions`
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Error ${res.status}`);
+    }
+    return res.json();
+    // -> { sessions: [...] }
+  },
+
   // 9. Biomarker catalog
   biomarkerCatalog: async () => {
     const res = await fetch(`${API_BASE}/biomarkers`);
@@ -1486,22 +1499,10 @@ function trendForm() {
           rangeStr
         )
         .then((d) => {
+          // table
           const sectionTitle = document.createElement("h2");
           sectionTitle.textContent = `Trend Results for ${biomarkerName}`;
           results.appendChild(sectionTitle);
-          if (d.trend && d.trend.length > 0) {
-            const chartElement = createBiomarkerTrendChart(
-              d.trend,
-              biomarkerName,
-              biomarkerId.toString()
-            );
-            results.appendChild(chartElement);
-          } else {
-            const noChartDataMsg = document.createElement("p");
-            noChartDataMsg.textContent =
-              "No data available to display chart for this biomarker.";
-            results.appendChild(noChartDataMsg);
-          }
           if (d.trend && d.trend.length > 0) {
             const t = makeTable(["Date", "Value"]);
             const tableData = [...d.trend].reverse();
@@ -1516,11 +1517,18 @@ function trendForm() {
               t.appendChild(tr);
             });
             results.appendChild(t);
+            // chart
+            const chartElement = createBiomarkerTrendChart(
+              d.trend,
+              biomarkerName,
+              biomarkerId.toString()
+            );
+            results.appendChild(chartElement);
           } else {
-            const noTableDataMsg = document.createElement("p");
-            noTableDataMsg.textContent =
-              "No data available to display in table.";
-            results.appendChild(noTableDataMsg);
+            const noDataMsg = document.createElement("p");
+            noDataMsg.textContent =
+              "No data available to display chart for this biomarker.";
+            results.appendChild(noDataMsg);
           }
         })
         .catch(showError);
@@ -1605,38 +1613,40 @@ function bioAgeHistory() {
 /* Query 8: session details */
 function sessionDetailsForm() {
   if (!ensureUser()) return;
+  const userId = selectedUserId
   content.innerHTML = "";
   const form = document.createElement("div");
   form.className = "form-block";
-  form.innerHTML = `<h4>Session Details - User ${selectedUserId}</h4>`;
+  form.innerHTML = `<h4>Session Details - User ${userId}</h4>`;
   const results = document.createElement("div");
-  api.listUsers().then((data) => {
-    const user = data.users.find((u) => u.userId == selectedUserId);
-    if (!user || user.sessionCount === 0) {
-      form.innerHTML += `<p>No sessions found for user ${selectedUserId}.</p>`;
-      content.appendChild(form); // Ensure form is added even if no sessions
+  api.getUserSessions(userId).then((data) => {
+    if (!data || data.sessions.length === 0) {
+      form.innerHTML += `<p>No sessions found for user ${userId}.</p>`;
+      content.appendChild(form);
       return;
     }
     form.innerHTML += `<label class="small">Select Session</label>`;
     const sel = document.createElement("select");
     sel.id = "sessSelect";
-    for (let sid = 1; sid <= user.sessionCount; sid++) {
+    for (let i = 0; i < data.sessions.length; i++) {
+      const session = data.sessions[i];
       const op = document.createElement("option");
-      op.value = sid;
-      op.textContent = `Session ${sid}`;
+      op.value = session.sessionId;
+      op.dataset.userSessionId = i + 1;
+      op.textContent = `Session ${i + 1} (${session.sessionDate})`;
       sel.appendChild(op);
     }
     form.appendChild(sel);
     const btn = document.createElement("button");
     btn.textContent = "Run";
     btn.onclick = () => {
-      results.innerHTML = ""; // Clear previous results
-      const sid = parseInt(document.querySelector("#sessSelect").value);
+      results.innerHTML = "";
+      const op = sel.options[sel.selectedIndex];
       api
-        .getSessionDetails(selectedUserId, sid)
+        .getSessionDetails(userId, op.value)
         .then((d) => {
           results.innerHTML = `
-            <h2>Session ${sid}</h2>
+            <h2>Session ${op.dataset.userSessionId}</h2>
             <p><strong>Date:</strong> ${
               d.sessionDate
             } &nbsp; <strong>Fasting:</strong> ${
