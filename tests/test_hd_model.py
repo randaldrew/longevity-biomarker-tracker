@@ -6,7 +6,7 @@ from src.analytics.hd import HomeostasisDysregulation
 
 def test_hd_mahalanobis_calculation():
     """Test HD Mahalanobis distance calculation against manual numpy calculation"""
-    # Create tiny reference dataset (30 people, 3 biomarkers for simplicity)
+    # Create small reference dataset (30 people, 3 biomarkers for simplicity)
     np.random.seed(42)  # Reproducible
     reference_data = pd.DataFrame(
         {

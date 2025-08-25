@@ -22,7 +22,7 @@ jobs:
           MYSQL_USER: test_user
           MYSQL_PASSWORD: test_password
         ports:
-          - 3307:3306  # Changed from 3306:3306
+          - 3307:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
@@ -44,7 +44,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y mysql-client
 
-    # .github/workflows/ci.yml  (excerpt)
+    # .github/workflows/ci.yml
     - name: Initialize test database
       run: |
         mysql -h 127.0.0.1 -P $DB_PORT -u root -prootpassword \
@@ -56,7 +56,7 @@ jobs:
 
 
     # .github/workflows/ci.yml  – Check schema integrity step
-    # 1) drop MySQL-only comment lines and SET/ENGINE stuff
+    # 1) drop MySQL-only comment lines and SET/ENGINE
     # 2) strip back-ticks and extra spaces
     - name: Check schema integrity
       run: |

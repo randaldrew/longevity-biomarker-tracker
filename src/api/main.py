@@ -31,7 +31,6 @@ app = FastAPI(
     description="API for tracking biomarkers and calculating biological age",
 )
 
-# RD final review: CORS fix with ReGeX
 CORS_ORIGIN_REGEX = r"^https?://(localhost|\[::1\]|\d{1,3}(?:\.\d{1,3}){3})(:\d+)?$"
 
 app.add_middleware(
@@ -43,7 +42,7 @@ app.add_middleware(
 )
 
 
-# RD: Need to explicitly handle OPTIONS method in FastAPI
+# Need to explicitly handle OPTIONS method in FastAPI
 @app.options("/api/v1/users")
 def options_users():
     return {"message": "OK"}
@@ -117,7 +116,7 @@ def startup():
             f"HD reference population: {len(reference_df)} people with complete biomarker data"
         )
 
-        # RD 5-27 final review: Guard against empty reference population
+        # Guard against empty reference population
         if len(reference_df) < 20:
             print(
                 f"[WARNING] HD reference population too small ({len(reference_df)} < 20). HD model disabled."
@@ -135,7 +134,6 @@ def startup():
         connection.close()
 
 
-# RD 5-27 final review: fixed potential connection leak
 def get_db():
     """Yield a PyMySQL connection and close it after"""
     connection = pymysql.connect(
@@ -290,13 +288,13 @@ def calculate_biological_age(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model"
             )
     else:
-        models_to_use = models.keys()  # by default use all models
+        models_to_use = models.keys()  # By default use all models
     user_profile = get_user_profile(userId, db)
     chronological_age = user_profile["user"]["age"]
     return_responses = []
 
     with db.cursor() as cursor:
-        # ---- missing biomarkers -----------------------------------------
+        # ---- Missing biomarkers -----------------------------------------
         if len(user_profile["biomarkers"]) != 9:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -429,7 +427,7 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
 
     with db.cursor() as cursor:
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # ---- insert into MeasurementSession -----------------------------------------
+        # ---- Insert into MeasurementSession -----------------------------------------
         try:
             query = """
             INSERT INTO MeasurementSession(UserID, SessionDate, FastingStatus, CreatedAt)
@@ -448,7 +446,7 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
                     detail=f"Measurement session for {session_date} already exists userId {userId}",
                 )
             raise
-        # ---- insert into Measurements -----------------------------------------
+        # ---- Insert into Measurements -----------------------------------------
         taken_at = datetime.combine(session_date, datetime.now().time()).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
@@ -465,7 +463,7 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
                     query, (new_session_id, biomarker_id, value, taken_at, created_at)
                 )
                 inserted_measurement_ids.append(cursor.lastrowid)
-            # ----  check if BiomarkerID foreign key exist -----------------------------------------
+            # ----  Check if BiomarkerID foreign key exist -----------------------------------------
             except pymysql.err.IntegrityError as e:
                 if e.args[0] == 1452:
                     raise HTTPException(
@@ -473,7 +471,7 @@ def add_new_measurement(userId: int, body=Body(), db=Depends(get_db)):
                         detail=f"Invalid value for biomarkerId {biomarker_id}",
                     )
                 raise
-        # ----  commit if all inserts were successful -----------------------------------------
+        # ----  Commit if all inserts were successful -----------------------------------------
         db.commit()
 
     return {"sessionId": new_session_id, "measurementIds": inserted_measurement_ids}
@@ -536,7 +534,7 @@ def biomarker_trends(
     # ----  parse input to calculate upto when the Biomarker should be queried --------------------------
     range = range.strip()
 
-    # RD 5-27 Fix: More flexible parsing: "6 months", "6months", "6 month" all work
+    # Flexible parsing: "6 months", "6months", "6 month" all work
     match = re.match(r"^(\d+)\s*(day|week|month|year)s?$", range.lower())
     if not match:
         raise HTTPException(
@@ -621,7 +619,7 @@ def get_biological_age_history(
 def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
     """Query 8: Show all biomarkers measured in a specific lab session"""
     with db.cursor() as cursor:
-        # ---- session data --------------------------------------------------
+        # ---- Session data --------------------------------------------------
         query = """
         SELECT
             SessionID AS sessionId,
@@ -642,7 +640,7 @@ def get_session_details(userId: int, sessionId: int, db=Depends(get_db)):
             session_data["fastingStatus"] = (
                 True if session_data["fastingStatus"] else False
             )
-        # ---- measurement data --------------------------------------------------
+        # ---- Measurement data --------------------------------------------------
         query = """
         SELECT
             m.BiomarkerID   AS biomarkerID,
@@ -765,7 +763,7 @@ def get_biomarkers_with_counts(db=Depends(get_db)):
 
 
 # ---------------------------------------------------------------------
-# Legacy test stub endpoints - DO NOT USE IN PRODUCTION
+# Legacy test stub endpoints - not used in production
 # These exist only for backward compatibility with existing tests
 # Real API endpoints use /api/v1/ prefix
 # ---------------------------------------------------------------------

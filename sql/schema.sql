@@ -8,7 +8,8 @@ DROP VIEW IF EXISTS
     v_user_latest_measurements,
     v_biomarker_ranges,
     v_hd_reference_candidates,
-    v_user_anthro_history;
+    v_user_anthro_history,
+    v_user_with_age;
 
 -- then the tables (children → parents)
 DROP TABLE IF EXISTS BiologicalAgeResult;
@@ -69,7 +70,7 @@ CREATE TABLE Measurement (
     CONSTRAINT fk_measurement_biomarker FOREIGN KEY (BiomarkerID) REFERENCES Biomarker (BiomarkerID) ON DELETE RESTRICT
 );
 
-/* --------- Anthropometry (NEW) --------- */
+/* --------- Anthropometry --------- */
 CREATE TABLE Anthropometry (
     AnthroID INT AUTO_INCREMENT PRIMARY KEY,
     UserID INT NOT NULL,
